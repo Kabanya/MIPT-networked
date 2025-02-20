@@ -20,6 +20,9 @@ int main(int argc, const char **argv)
     return 1;
   }
 
+  std::string connectRep = "New Client Connection";
+  sendto(sfd, connectRep.c_str(), connectRep.size(), 0, resAddrInfo.ai_addr, resAddrInfo.ai_addrlen);
+
   while (true)
   {
     std::string input;
