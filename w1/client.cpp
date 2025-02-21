@@ -2,6 +2,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <netdb.h>
+#include <unistd.h>
 #include <cstring>
 #include <cstdio>
 #include <iostream>
@@ -20,7 +21,22 @@ int main(int argc, const char **argv)
     return 1;
   }
 
-  std::string connectRep = "New Client Connection";
+  struct sockaddr_in client_addr{};
+  client_addr.sin_family = AF_INET;
+  client_addr.sin_addr.s_addr = INADDR_ANY;
+  client_addr.sin_port = 0;
+
+  if (bind(sfd, (struct sockaddr*)&client_addr, sizeof(client_addr)) == -1) {
+    perror("bind failed");
+    close(sfd);
+    return 1;
+  }
+
+  socklen_t addr_size = sizeof(client_addr);
+  getsockname(sfd, (struct sockaddr*)&client_addr, &addr_size);
+  std::cout << "Client is using port: " << ntohs(client_addr.sin_port) << std::endl;
+
+  std::string connectRep = "CONNECT";
   sendto(sfd, connectRep.c_str(), connectRep.size(), 0, resAddrInfo.ai_addr, resAddrInfo.ai_addrlen);
 
   while (true)
