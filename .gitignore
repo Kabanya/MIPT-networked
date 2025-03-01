@@ -35,3 +35,6 @@
 build/
 3rdParty/
 .vscode/
+w1/client
+.gitignore
+w1/server
