@@ -95,9 +95,9 @@ int main(int argc, const char **argv)
           Client newClient;
           newClient.addr = sin;
           clients.push_back(newClient);
-          printf("New client connected: %s:%d\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
+          // printf("New client connected: %s:%d\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
           
-          std::string welcomeMsg = "SERVER: /c -- message to all users\n/help -- for help";
+          std::string welcomeMsg = "\n/c -- message to all users\n/help -- for help";
           sendto(sfd, welcomeMsg.c_str(), welcomeMsg.size(), 0, (struct sockaddr*)&sin, slen);
           // msg_to_all_clients(sfd, clients, welcomeMsg);
         }

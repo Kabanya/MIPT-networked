@@ -81,6 +81,9 @@ int main(int argc, const char **argv)
   getsockname(sfd, (struct sockaddr*)&client_addr, &addr_size);
   std::cout << "Client is using port: " << ntohs(client_addr.sin_port) << std::endl;
 
+  std::string connectRep = "New client!";
+  sendto(sfd, connectRep.c_str(), connectRep.size(), 0, resAddrInfo.ai_addr, resAddrInfo.ai_addrlen);
+
   std::thread receive_thread(receive_messages, sfd);
   receive_thread.detach();
   
