@@ -45,6 +45,7 @@ void display_help()
 {
   std::cout << "\n-----------------Client-INFO-------------------\n" 
             << "/c [msg] - Send a message to all connected clients\n"
+            << "/mathduel - Challenge someone to a math duel\n"
             << "Any other message will be sent to the server only\n"
             << "----------------Message-ownership----------------\n"
             << "SERVER: [msg] - Send a message to the server\n"

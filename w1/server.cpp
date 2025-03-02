@@ -1,46 +1,8 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <arpa/inet.h>
-#include <netdb.h>
 #include <cstring>
-#include <cstdio>
-#include <vector>
-#include <iostream>
 #include <thread>
-#include <string>
+
 #include "socket_tools.h"
-
-struct Client
-{
-  sockaddr_in addr;
-};
-
-
-void msg_to_all_clients(int sfd, const std::vector<Client>& clients, const std::string& message)
-{
-  for (const Client& client : clients)
-{
-    socklen_t slen = sizeof(sockaddr_in);
-    sendto(sfd, message.c_str(), message.size(), 0, (struct sockaddr*)&client.addr, slen);
-  }
-  printf("msg to all clients: %s\n", message.c_str());
-}
-
-void server_input_processing(int sfd, std::vector<Client>& clients)
-{
-  std::string input;
-  while (true)
-  {
-    printf(">");
-    std::getline(std::cin, input);
-    if (!input.empty())
-    {
-      std::string broadcastMsg = "SERVER: " + input;
-      msg_to_all_clients(sfd, clients, broadcastMsg);
-    }
-  }
-}
+#include "server_tools.h"
 
 int main(int argc, const char **argv)
 {
@@ -81,32 +43,36 @@ int main(int argc, const char **argv)
       if (numBytes > 0)
       {
         std::string message(buffer);
+        Client currentClient;
+        currentClient.addr = sin;
+        currentClient.identifier = client_to_string(currentClient);
         bool clientExists = false;
+        
         for (const Client& client : clients)
         {
           if (client.addr.sin_addr.s_addr == sin.sin_addr.s_addr && client.addr.sin_port == sin.sin_port)
           {
             clientExists = true;
+            currentClient = client;
             break;
           }
         }
+        
         if(!clientExists)
         {
-          Client newClient;
-          newClient.addr = sin;
-          clients.push_back(newClient);
-          // printf("New client connected: %s:%d\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
+          clients.push_back(currentClient);
           
-          std::string welcomeMsg = "\n/c -- message to all users\n/help -- for help";
+          std::string welcomeMsg = "\n/c - message to all users\n/mathduel - challenge someone to a math duel\n/help - for help";
           sendto(sfd, welcomeMsg.c_str(), welcomeMsg.size(), 0, (struct sockaddr*)&sin, slen);
-          // msg_to_all_clients(sfd, clients, welcomeMsg);
         }
-        // task 2: done /c
-        if (message.length() > 3 && message.substr(0, 3) == "/c ")
+        
+        mathduel(message, currentClient, sfd, clients);
+      
+        if (message.length() > 3 && message.substr(0, 3) == "/c ") //mb better to move into server_tools
         {
-          std::string chatMessage = message.substr(3); // Extract the message without /c prefix
-          std::string senderInfo = std::string(inet_ntoa(sin.sin_addr)) + ":" + 
-                                   std::to_string(ntohs(sin.sin_port));
+          //extrarct & send message
+          std::string chatMessage = message.substr(3);
+          std::string senderInfo = client_to_string(currentClient);
           
           printf("msg from (%s): %s\n", senderInfo.c_str(), chatMessage.c_str());
 
@@ -115,24 +81,13 @@ int main(int argc, const char **argv)
         }
         else
         {
-          printf("(%s:%d) %s\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port), buffer);
-          
-          // std::string relayMsg = "CLIENT(" + std::string(inet_ntoa(sin.sin_addr)) + ":" + 
-          //                        std::to_string(ntohs(sin.sin_port)) + "): " + message;
-          
-          // for (const Client& client : clients)
-          // {
-          //   // Don't send the message back to the sender
-          //   if (client.addr.sin_addr.s_addr != sin.sin_addr.s_addr || 
-          //       client.addr.sin_port != sin.sin_port)
-          //   {
-          //     sendto(sfd, relayMsg.c_str(), relayMsg.size(), 0, 
-          //           (struct sockaddr*)&client.addr, sizeof(sockaddr_in));
-          //   }
-          //}
+          printf("(%s) %s\n", currentClient.identifier.c_str(), buffer);
         }
       }
     }
+    void cleanup_inactive_duels(std::vector<MathDuel>& activeDuels);
   }
+
+
   return 0;
 }
