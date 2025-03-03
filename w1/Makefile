@@ -1,23 +1,27 @@
+CXX ?= g++
+
 socket_tools.o: socket_tools.cpp
-	g++ -c socket_tools.cpp -o socket_tools.o
+	$(CXX) -c socket_tools.cpp -o socket_tools.o
 
 server_tools.o: server_tools.cpp
-	g++ -c server_tools.cpp -o server_tools.o
+	$(CXX) -c server_tools.cpp -o server_tools.o
+
+client_tools.o: client_tools.cpp 
+	$(CXX) -c client_tools.cpp -o client_tools.o
 
 server.o: server.cpp
-	g++ -c server.cpp -o server.o
+	$(CXX) -c server.cpp -o server.o
 
 client.o: client.cpp
-	g++ -c client.cpp -o client.o
+	$(CXX) -c client.cpp -o client.o
 
-client: socket_tools.o client.o
-	g++ socket_tools.o client.o -o client
+client: socket_tools.o client_tools.o client.o
+	$(CXX) socket_tools.o client_tools.o client.o -o client
 
 server: socket_tools.o server_tools.o server.o
-	g++ socket_tools.o server_tools.o server.o -o server
+	$(CXX) socket_tools.o server_tools.o server.o -o server
 
 all: client server
-	g++ socket_tools.o client.o -o client
 
 clean:
-	rm -f socket_tools.o server.o client.o server client server_tools.o
+	$(RM) socket_tools.o server_tools.o client_tools.o server.o client.o server client

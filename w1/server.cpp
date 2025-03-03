@@ -45,7 +45,7 @@ int main(int argc, const char **argv)
         std::string message(buffer);
         Client currentClient;
         currentClient.addr = sin;
-        currentClient.identifier = client_to_string(currentClient);
+        currentClient.id = client_to_string(currentClient);
         bool clientExists = false;
         
         for (const Client& client : clients)
@@ -81,7 +81,7 @@ int main(int argc, const char **argv)
         }
         else
         {
-          printf("(%s) %s\n", currentClient.identifier.c_str(), buffer);
+          printf("(%s) %s\n", currentClient.id.c_str(), buffer);
         }
       }
     }

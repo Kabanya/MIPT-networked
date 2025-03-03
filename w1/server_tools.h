@@ -1,17 +1,13 @@
 #pragma once
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/select.h>
 #include <arpa/inet.h>
 #include <string>
 #include <queue>
 
-
 struct Client
 {
   sockaddr_in addr;
-  std::string identifier;
+  std::string id;
 };
 
 struct MathProblem
@@ -33,12 +29,16 @@ struct MathDuel
 extern std::queue<Client> duelQueue;
 extern std::vector<MathDuel> activeDuels;
 
+//Msg & input logic
 std::string client_to_string(const Client& client);
 
 void msg_to_all_clients(int sfd, const std::vector<Client>& clients, const std::string& message);
 
 void msg_to_client(int sfd, const Client& client, const std::string& message);
 
+void msg_to_server_and_all(std::string &message, Client &currentClient, int sfd, std::vector<Client> &clients, char buffer[1000]);
+
+//MATH logic
 MathProblem generate_math_problem();
 
 void start_math_duel(int sfd, const Client& challenger, const Client& opponent, std::vector<Client>& all_clients);

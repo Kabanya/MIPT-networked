@@ -28,6 +28,42 @@ void msg_to_client(int sfd, const Client& client, const std::string& message)
   printf("msg to client (%s): %s\n", client_to_string(client).c_str(), message.c_str());
 }
 
+void msg_to_server_and_all(std::string &message, Client &currentClient, int sfd, std::vector<Client> &clients, char buffer[1000])
+{
+  if (message.length() > 3 && message.substr(0, 3) == "/c ") // mb better to move into server_tools or in server.cpp
+  {
+    // extrarct & send message
+    std::string chatMessage = message.substr(3);
+    std::string senderInfo = client_to_string(currentClient);
+
+    printf("msg from (%s): %s\n", senderInfo.c_str(), chatMessage.c_str());
+
+    std::string broadcastMsg = "CHAT (" + senderInfo + "): " + chatMessage;
+    msg_to_all_clients(sfd, clients, broadcastMsg);
+  }
+  else
+  {
+    printf("(%s) %s\n", currentClient.id.c_str(), buffer);
+  }
+}
+
+void server_input_processing(int sfd, std::vector<Client>& clients)
+{
+  std::string input;
+  while (true)
+  {
+    printf(">");
+    std::getline(std::cin, input);
+    if (!input.empty())
+    {
+      std::string broadcastMsg = "SERVER: " + input;
+      msg_to_all_clients(sfd, clients, broadcastMsg);
+    }
+  }
+}
+
+//-----------------Math logic functions-----------------
+
 MathProblem generate_math_problem()
 {
   static bool initialized = false;
@@ -124,20 +160,6 @@ bool is_in_duel(const Client& client, MathDuel** current_duel)
   return false;
 }
 
-void server_input_processing(int sfd, std::vector<Client>& clients)
-{
-  std::string input;
-  while (true)
-  {
-    printf(">");
-    std::getline(std::cin, input);
-    if (!input.empty())
-    {
-      std::string broadcastMsg = "SERVER: " + input;
-      msg_to_all_clients(sfd, clients, broadcastMsg);
-    }
-  }
-}
 
 void mathduel(std::string message, Client currentClient, int sfd, std::vector<Client> &clients)
 {
@@ -153,7 +175,7 @@ void mathduel(std::string message, Client currentClient, int sfd, std::vector<Cl
     {
       duelQueue.push(currentClient);
       msg_to_client(sfd, currentClient, "Waiting for an opponent...");
-      msg_to_all_clients(sfd, clients, "CHAT (Server): " + currentClient.identifier + " wants math duel! Type /mathduel to join.");
+      msg_to_all_clients(sfd, clients, "CHAT (Server): " + currentClient.id + " wants math duel! Type /mathduel to join.");
     }
     else
     {
@@ -181,7 +203,7 @@ void mathduel(std::string message, Client currentClient, int sfd, std::vector<Cl
       {
         duelQueue.push(currentClient);
         msg_to_client(sfd, currentClient, "Waiting for an opponent...");
-        msg_to_all_clients(sfd, clients, "CHAT (Server): " + currentClient.identifier + " wants math duel! Type /mathduel to join.");
+        msg_to_all_clients(sfd, clients, "CHAT (Server): " + currentClient.id + " wants math duel! Type /mathduel to join.");
       }
     }
   }
