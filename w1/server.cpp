@@ -1,12 +1,8 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <arpa/inet.h>
-#include <netdb.h>
 #include <cstring>
-#include <cstdio>
-#include <iostream>
+#include <thread>
+
 #include "socket_tools.h"
+#include "server_tools.h"
 
 int main(int argc, const char **argv)
 {
@@ -19,7 +15,12 @@ int main(int argc, const char **argv)
     printf("cannot create socket\n");
     return 1;
   }
-  printf("listening!\n");
+  printf("listening on port %s!\n", port);
+
+  std::vector<Client> clients;
+  
+  std::thread input_thread(server_input_processing, sfd, std::ref(clients));
+  input_thread.detach(); 
 
   while (true)
   {
@@ -29,7 +30,6 @@ int main(int argc, const char **argv)
 
     timeval timeout = { 0, 100000 }; // 100 ms
     select(sfd + 1, &readSet, NULL, NULL, &timeout);
-
 
     if (FD_ISSET(sfd, &readSet))
     {
@@ -42,9 +42,52 @@ int main(int argc, const char **argv)
       ssize_t numBytes = recvfrom(sfd, buffer, buf_size - 1, 0, (sockaddr*)&sin, &slen);
       if (numBytes > 0)
       {
-        printf("(%s:%d) %s\n", inet_ntoa(sin.sin_addr), sin.sin_port, buffer); // assume that buffer is a string
+        std::string message(buffer);
+        Client currentClient;
+        currentClient.addr = sin;
+        currentClient.id = client_to_string(currentClient);
+        bool clientExists = false;
+        
+        for (const Client& client : clients)
+        {
+          if (client.addr.sin_addr.s_addr == sin.sin_addr.s_addr && client.addr.sin_port == sin.sin_port)
+          {
+            clientExists = true;
+            currentClient = client;
+            break;
+          }
+        }
+        
+        if(!clientExists)
+        {
+          clients.push_back(currentClient);
+          
+          std::string welcomeMsg = "\n/c - message to all users\n/mathduel - challenge someone to a math duel\n/help - for help";
+          sendto(sfd, welcomeMsg.c_str(), welcomeMsg.size(), 0, (struct sockaddr*)&sin, slen);
+        }
+        
+        mathduel(message, currentClient, sfd, clients);
+      
+        if (message.length() > 3 && message.substr(0, 3) == "/c ") //mb better to move into server_tools
+        {
+          //extrarct & send message
+          std::string chatMessage = message.substr(3);
+          std::string senderInfo = client_to_string(currentClient);
+          
+          printf("msg from (%s): %s\n", senderInfo.c_str(), chatMessage.c_str());
+
+          std::string broadcastMsg = "CHAT (" + senderInfo + "): " + chatMessage;
+          msg_to_all_clients(sfd, clients, broadcastMsg);
+        }
+        else
+        {
+          printf("(%s) %s\n", currentClient.id.c_str(), buffer);
+        }
       }
     }
+    void cleanup_inactive_duels(std::vector<MathDuel>& activeDuels);
   }
+
+
   return 0;
 }
