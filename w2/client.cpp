@@ -30,7 +30,7 @@ int main(int argc, const char **argv)
 {
   int width = 800;
   int height = 600;
-  InitWindow(width, height, "w6 AI MIPT");
+  InitWindow(width, height, "w2 MIPT networked");
 
   const int scrWidth = GetMonitorWidth(0);
   const int scrHeight = GetMonitorHeight(0);
@@ -71,8 +71,10 @@ int main(int argc, const char **argv)
   uint32_t lastFragmentedSendTime = timeStart;
   uint32_t lastMicroSendTime = timeStart;
   bool connected = false;
-  float posx = 0.f;
-  float posy = 0.f;
+  float posx = GetRandomValue(100, 1000);
+  float posy = GetRandomValue(100, 500);
+  float velx = 0.f;
+  float vely = 0.f;
   while (!WindowShouldClose())
   {
     const float dt = GetFrameTime();
@@ -111,15 +113,20 @@ int main(int argc, const char **argv)
     bool right = IsKeyDown(KEY_RIGHT);
     bool up = IsKeyDown(KEY_UP);
     bool down = IsKeyDown(KEY_DOWN);
-    constexpr float spd = 10.f;
-    posx += ((left ? -1.f : 0.f) + (right ? 1.f : 0.f)) * dt * spd;
-    posy += ((up ? -1.f : 0.f) + (down ? 1.f : 0.f)) * dt * spd;
+    constexpr float accel = 30.f;
+    velx += ((left ? -1.f : 0.f) + (right ? 1.f : 0.f)) * dt * accel;
+    vely += ((up ? -1.f : 0.f) + (down ? 1.f : 0.f)) * dt * accel;
+    posx += velx * dt;
+    posy += vely * dt;
+    velx *= 0.99f;
+    vely *= 0.99f;
 
     BeginDrawing();
       ClearBackground(BLACK);
       DrawText(TextFormat("Current status: %s", "unknown"), 20, 20, 20, WHITE);
       DrawText(TextFormat("My position: (%d, %d)", (int)posx, (int)posy), 20, 40, 20, WHITE);
       DrawText("List of players:", 20, 60, 20, WHITE);
+      DrawCircleV(Vector2{posx, posy}, 10.f, WHITE);
     EndDrawing();
   }
   return 0;

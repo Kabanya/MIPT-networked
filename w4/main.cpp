@@ -9,16 +9,17 @@
 
 
 static std::vector<Entity> entities;
+static std::unordered_map<uint16_t, size_t> indexMap;
 static uint16_t my_entity = invalid_entity;
 
 void on_new_entity_packet(ENetPacket *packet)
 {
   Entity newEntity;
   deserialize_new_entity(packet, newEntity);
-  // TODO: Direct adressing, of course!
-  for (const Entity &e : entities)
-    if (e.eid == newEntity.eid)
-      return; // don't need to do anything, we already have entity
+  auto itf = indexMap.find(newEntity.eid);
+  if (itf != indexMap.end())
+    return; // don't need to do anything, we already have entity
+  indexMap[newEntity.eid] = entities.size();
   entities.push_back(newEntity);
 }
 
@@ -27,18 +28,24 @@ void on_set_controlled_entity(ENetPacket *packet)
   deserialize_set_controlled_entity(packet, my_entity);
 }
 
+template<typename Callable>
+static void get_entity(uint16_t eid, Callable c)
+{
+  auto itf = indexMap.find(eid);
+  if (itf != indexMap.end())
+    c(entities[itf->second]);
+}
+
 void on_snapshot(ENetPacket *packet)
 {
   uint16_t eid = invalid_entity;
   float x = 0.f; float y = 0.f;
   deserialize_snapshot(packet, eid, x, y);
-  // TODO: Direct adressing, of course!
-  for (Entity &e : entities)
-    if (e.eid == eid)
-    {
-      e.x = x;
-      e.y = y;
-    }
+  get_entity(eid, [&](Entity& e)
+  {
+    e.x = x;
+    e.y = y;
+  });
 }
 
 int main(int argc, const char **argv)
@@ -128,22 +135,22 @@ int main(int argc, const char **argv)
       bool right = IsKeyDown(KEY_RIGHT);
       bool up = IsKeyDown(KEY_UP);
       bool down = IsKeyDown(KEY_DOWN);
-      // TODO: Direct adressing, of course!
-      for (Entity &e : entities)
-        if (e.eid == my_entity)
-        {
-          // Update
-          e.x += ((left ? -dt : 0.f) + (right ? +dt : 0.f)) * 100.f;
-          e.y += ((up ? -dt : 0.f) + (down ? +dt : 0.f)) * 100.f;
+      get_entity(my_entity, [&](Entity& e)
+      {
+        // Update
+        e.x += ((left ? -dt : 0.f) + (right ? +dt : 0.f)) * 100.f;
+        e.y += ((up ? -dt : 0.f) + (down ? +dt : 0.f)) * 100.f;
 
-          // Send
-          send_entity_state(serverPeer, my_entity, e.x, e.y);
-        }
+        // Send
+        send_entity_state(serverPeer, my_entity, e.x, e.y);
+        camera.target.x = e.x;
+        camera.target.y = e.y;
+      });
     }
 
 
     BeginDrawing();
-      ClearBackground(GRAY);
+      ClearBackground(Color{40, 40, 40, 255});
       BeginMode2D(camera);
         for (const Entity &e : entities)
         {
