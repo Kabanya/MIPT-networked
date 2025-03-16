@@ -5,11 +5,12 @@
 #include <vector>
 #include <sstream>
 
-struct Player {
-    int id;
-    int ping;
-    float x;
-    float y;
+struct Player 
+{
+  int id;
+  float x;
+  float y;
+  int ping;
 };
 
 void send_fragmented_packet(ENetPeer *peer)
@@ -59,7 +60,7 @@ int main(int argc, const char **argv)
     SetWindowSize(width, height);
   }
 
-  SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
+  SetTargetFPS(60);
 
   if (enet_initialize() != 0)
   {
@@ -89,12 +90,14 @@ int main(int argc, const char **argv)
   uint32_t lastFragmentedSendTime = timeStart;
   uint32_t lastMicroSendTime = timeStart;
   uint32_t lastPositionSendTime = timeStart;
-
   bool connectedToLobby = false;
+  bool connectedToGameServer = false;
   
+  ENetPeer *gamePeer = nullptr;
+  std::string gameServerStatus = "Connecting to lobby...";
   std::vector<Player> players;
   
-  float posx = GetRandomValue(100, 500);
+  float posx = GetRandomValue(100, 1000);
   float posy = GetRandomValue(100, 500);
   float velx = 0.f;
   float vely = 0.f;
@@ -109,22 +112,117 @@ int main(int argc, const char **argv)
       switch (event.type)
       {
       case ENET_EVENT_TYPE_CONNECT:
-        printf("Connected to %x:%u\n", event.peer->address.host, event.peer->address.port);
-        connectedToLobby = true;
+        printf("Connection with %x:%u established\n", event.peer->address.host, event.peer->address.port);
+        if (event.peer == lobbyPeer) 
+        {
+          connectedToLobby = true;
+          gameServerStatus = "Connected to lobby";
+        } 
+        else if (event.peer == gamePeer) 
+        {
+          connectedToGameServer = true;
+          gameServerStatus = "Connected to game server";
+        }
         break;
+        
+      case ENET_EVENT_TYPE_RECEIVE:
+        printf("Packet received '%s'\n", event.packet->data);
+        
+        if (event.peer == lobbyPeer && !connectedToGameServer) 
+        {
+          const char* data = (const char*)event.packet->data;
+          
+          if (strncmp(data, "GAMESERVER", 10) == 0) 
+          {
+            char serverIP[256];
+            int serverPort;
+            if (sscanf(data, "GAMESERVER %s %d", serverIP, &serverPort) == 2) 
+            {
+              ENetAddress gameAddress;
+              enet_address_set_host(&gameAddress, serverIP);
+              gameAddress.port = serverPort;
+              
+              gamePeer = enet_host_connect(client, &gameAddress, 2, 0);
+              if (!gamePeer) 
+              {
+                gameServerStatus = "Cannot connect to game server";
+              } 
+              else 
+              {
+                gameServerStatus = "Connecting to game server...";
+              }
+            }
+          }
+        }
+        else if (event.peer == gamePeer) 
+        {
+          const char* data = (const char*)event.packet->data;
+          
+          if (strncmp(data, "PLAYERS", 7) == 0) 
+          {
+            players.clear();
+            
+            std::string playerData((const char*)event.packet->data);
+            std::istringstream ss(playerData.substr(8));
+            
+            Player player;
+            std::string token;
+            
+            while (std::getline(ss, token, ';')) 
+            {
+              std::istringstream playerStream(token);
+              if (playerStream >> player.id >> player.x >> player.y >> player.ping) 
+              {
+                players.push_back(player);
+              }
+            }
+          }
         }
         
         enet_packet_destroy(event.packet);
         break;
+        
+      case ENET_EVENT_TYPE_DISCONNECT:
+        printf("Disconnected from %x:%u\n", event.peer->address.host, event.peer->address.port);
+        if (event.peer == lobbyPeer) 
+        {
+          connectedToLobby = false;
+          gameServerStatus = "Disconnected from lobby";
+          lobbyPeer = nullptr;
+        } 
+        else if (event.peer == gamePeer) 
+        {
+          connectedToGameServer = false;
+          gameServerStatus = "Disconnected from game server";
+          gamePeer = nullptr;
+        }
+        break;
+        
+      default:
+        break;
       };
+    }
     
-    if (connectedToLobby) {
+    if (connectedToGameServer) 
+    {
       uint32_t curTime = enet_time_get();
-      if (curTime - lastFragmentedSendTime > 1000) {
+      if (curTime - lastPositionSendTime > 50) 
+      {
+        lastPositionSendTime = curTime;
+        send_position(gamePeer, posx, posy);
+      }
+    }
+    
+    if (connectedToLobby) 
+    {
+      uint32_t curTime = enet_time_get();
+      if (curTime - lastFragmentedSendTime > 1000) 
+      {
         lastFragmentedSendTime = curTime;
         // send_fragmented_packet(lobbyPeer);
       }
-      if (curTime - lastMicroSendTime > 100) {
+      if (curTime - lastMicroSendTime > 100) 
+      {
         lastMicroSendTime = curTime;
         // send_micro_packet(lobbyPeer);
       }
@@ -133,7 +231,8 @@ int main(int argc, const char **argv)
     if (IsKeyPressed(KEY_ESCAPE))
       break;
       
-    if (IsKeyPressed(KEY_ENTER) && connectedToLobby) {
+    if (IsKeyPressed(KEY_ENTER) && connectedToLobby) 
+    {
       ENetPacket *packet = enet_packet_create("Start!", strlen("Start!") + 1, ENET_PACKET_FLAG_RELIABLE);
       enet_peer_send(lobbyPeer, 0, packet);
     }
@@ -153,20 +252,23 @@ int main(int argc, const char **argv)
     BeginDrawing();
       ClearBackground(BLACK);
       
+      DrawText(TextFormat("Current status: %s", gameServerStatus.c_str()), 20, 20, 20, WHITE);
       DrawText(TextFormat("My position: (%d, %d)", (int)posx, (int)posy), 20, 40, 20, WHITE);
-  
+      
       DrawCircleV(Vector2{posx, posy}, 10.f, WHITE);
       
       DrawText("List of players:", 20, 60, 20, WHITE);
       
       int yOffset = 80;
-      for (const auto& player : players) {
+      for (const auto& player : players) 
+      {
         DrawText(TextFormat("Player %d: (%d, %d) - Ping: %d ms", 
-                            player.id, (int)player.x, (int)player.y, player.ping), 
-                            20, yOffset, 18, WHITE);
+                          player.id, (int)player.x, (int)player.y, player.ping), 
+                          20, yOffset, 18, WHITE);
         yOffset += 20;
         
-        if (player.id != GetRandomValue(0, 1000)) {
+        if (player.id != GetRandomValue(0, 1000)) 
+        {
           DrawCircleV(Vector2{player.x, player.y}, 10.f, RED);
           DrawText(TextFormat("%d", player.id), player.x - 5, player.y - 5, 16, WHITE);
         }
@@ -174,7 +276,27 @@ int main(int argc, const char **argv)
       
     EndDrawing();
   }
-
+  
+  if (lobbyPeer) 
+  {
+    enet_peer_disconnect(lobbyPeer, 0);
+  }
+  if (gamePeer) 
+  {
+    enet_peer_disconnect(gamePeer, 0);
+  }
+  
+  ENetEvent event;
+  while (enet_host_service(client, &event, 1000) > 0) 
+  {
+    if (event.type == ENET_EVENT_TYPE_RECEIVE) 
+    {
+      enet_packet_destroy(event.packet);
+    }
+  }
+  
+  enet_host_destroy(client);
+  enet_deinitialize();
   
   CloseWindow();
   
