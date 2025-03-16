@@ -41,7 +41,7 @@ void send_position(ENetPeer *peer, float x, float y)
 {
   char posMsg[64];
   snprintf(posMsg, sizeof(posMsg), "POS %.2f %.2f", x, y);
-  ENetPacket *packet = enet_packet_create(posMsg, strlen(posMsg) + 1, ENET_PACKET_FLAG_RELIABLE);
+  ENetPacket *packet = enet_packet_create(posMsg, strlen(posMsg) + 1, ENET_PACKET_FLAG_UNSEQUENCED);
   enet_peer_send(peer, 0, packet);
 }
 
@@ -97,10 +97,12 @@ int main(int argc, const char **argv)
   std::string gameServerStatus = "Connecting to lobby...";
   std::vector<Player> players;
   
-  float posx = GetRandomValue(100, 1000);
+  float posx = GetRandomValue(100, 500);
   float posy = GetRandomValue(100, 500);
   float velx = 0.f;
   float vely = 0.f;
+  
+  int myPlayerId = -1;
   
   while (!WindowShouldClose())
   {
@@ -158,7 +160,17 @@ int main(int argc, const char **argv)
         {
           const char* data = (const char*)event.packet->data;
           
-          if (strncmp(data, "PLAYERS", 7) == 0) 
+          if (strncmp(data, "WELCOME", 7) == 0) 
+          {
+            int id;
+            char name[256];
+            if (sscanf(data, "WELCOME %d %s", &id, name) >= 1) 
+            {
+              myPlayerId = id;
+              gameServerStatus = "Playing as player " + std::to_string(myPlayerId);
+            }
+          }
+          else if (strncmp(data, "PLAYERS", 7) == 0) 
           {
             players.clear();
             
@@ -174,6 +186,107 @@ int main(int argc, const char **argv)
               if (playerStream >> player.id >> player.x >> player.y >> player.ping) 
               {
                 players.push_back(player);
+              }
+            }
+          }
+          else if (strncmp(data, "POS", 3) == 0) 
+          {
+            int playerId;
+            float x, y;
+            if (sscanf(data, "POS %d %f %f", &playerId, &x, &y) == 3) 
+            {
+              for (auto& player : players) 
+              {
+                if (player.id == playerId) 
+                {
+                  player.x = x;
+                  player.y = y;
+                  break;
+                }
+              }
+            }
+          }
+          else if (strncmp(data, "NEWPLAYER", 9) == 0) 
+          {
+            int playerId;
+            char playerName[256];
+            if (sscanf(data, "NEWPLAYER %d %s", &playerId, playerName) >= 1) 
+            {
+              bool playerExists = false;
+              for (const auto& player : players) 
+              {
+                if (player.id == playerId) 
+                {
+                  playerExists = true;
+                  break;
+                }
+              }
+              
+              //add new players in list 
+              if (!playerExists) 
+              {
+                Player newPlayer;
+                newPlayer.id = playerId;
+                newPlayer.x = 0.0f; 
+                newPlayer.y = 0.0f;
+                newPlayer.ping = 0;
+                players.push_back(newPlayer);
+              }
+            }
+          }
+          //player disconnection
+          else if (strncmp(data, "PLAYERLEFT", 10) == 0) 
+          {
+            int playerId;
+            if (sscanf(data, "PLAYERLEFT %d", &playerId) == 1) 
+            {
+              for (auto it = players.begin(); it != players.end(); ++it) 
+              {
+                if (it->id == playerId) 
+                {
+                  players.erase(it);
+                  break;
+                }
+              }
+            }
+          }
+          else if (strncmp(data, "PINGS", 5) == 0) 
+          {
+            printf("Processing ping data: %s\n", data);
+            std::string pingData((const char*)event.packet->data);
+            std::istringstream ss(pingData.substr(6));
+            
+            std::string token;
+            while (std::getline(ss, token, ';')) 
+            {
+              if (token.empty()) continue;
+              
+              int playerId, pingValue;
+              std::istringstream pingStream(token);
+              if (pingStream >> playerId >> pingValue) 
+              {
+                printf("Received ping update: Player %d, Ping %d\n", playerId, pingValue);
+                bool updated = false;
+                for (auto& player : players) 
+                {
+                  if (player.id == playerId) 
+                  {
+                    player.ping = pingValue;
+                    updated = true;
+                    break;
+                  }
+                }
+                
+                if (!updated && playerId != myPlayerId) 
+                {
+                  printf("Adding new player from ping data: %d\n", playerId);
+                  Player newPlayer;
+                  newPlayer.id = playerId;
+                  newPlayer.x = 0.0f;
+                  newPlayer.y = 0.0f;
+                  newPlayer.ping = pingValue;
+                  players.push_back(newPlayer);
+                }
               }
             }
           }
@@ -267,7 +380,7 @@ int main(int argc, const char **argv)
                           20, yOffset, 18, WHITE);
         yOffset += 20;
         
-        if (player.id != GetRandomValue(0, 1000)) 
+        if (player.id != myPlayerId) 
         {
           DrawCircleV(Vector2{player.x, player.y}, 10.f, RED);
           DrawText(TextFormat("%d", player.id), player.x - 5, player.y - 5, 16, WHITE);

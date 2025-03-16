@@ -94,9 +94,10 @@ void broadcastPings(const std::vector<Player>& players)
     }
     
     std::string pingStr = ss.str();
+    
     ENetPacket* packet = enet_packet_create(pingStr.c_str(), 
                                             pingStr.length() + 1, 
-                                            ENET_PACKET_FLAG_UNRELIABLE_FRAGMENT);
+                                            0);
     enet_peer_send(player.peer, 0, packet);
   }
 }
@@ -131,6 +132,7 @@ int main(int argc, const char **argv)
   
   std::vector<Player> players;
   uint32_t lastBroadcastTime = enet_time_get();
+  uint32_t lastPingTime = enet_time_get(); 
   
   while (true) 
   {
@@ -161,7 +163,7 @@ int main(int argc, const char **argv)
           enet_peer_send(event.peer, 0, welcomePacket);
           
           sendPlayerList(players, event.peer);
-          
+        
           players.push_back(newPlayer);
           
           broadcastNewPlayer(newPlayer, players);
@@ -236,6 +238,7 @@ int main(int argc, const char **argv)
     }
     
     uint32_t currentTime = enet_time_get();
+    
     if (currentTime - lastBroadcastTime > 50) 
     {
       lastBroadcastTime = currentTime;
@@ -243,6 +246,15 @@ int main(int argc, const char **argv)
       if (!players.empty()) 
       {
         broadcastPositions(players);
+      }
+    }
+
+    if (currentTime - lastPingTime > 500) 
+    {
+      lastPingTime = currentTime;
+      
+      if (!players.empty()) 
+      {
         broadcastPings(players);
       }
     }
