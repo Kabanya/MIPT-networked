@@ -21,7 +21,7 @@ int main(int argc, const char **argv)
     return 1;
   }
 
-  while (true)
+  while (true) 
   {
     ENetEvent event;
     while (enet_host_service(server, &event, 10) > 0)
