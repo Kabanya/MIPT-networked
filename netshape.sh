@@ -10,12 +10,12 @@ dnctl -f flush
 
 # Configure the new anchor
 cat <<EOF | pfctl -q -a netshape -f -
-dummynet in proto udp from any to any port 10887 pipe 1
-dummynet out proto udp from any to any port 10887 pipe 1
+dummynet in proto udp from any to any port 53473 pipe 1
+dummynet out proto udp from any to any port 53473 pipe 1
 EOF
 
 # Create the dummynet queue
-dnctl pipe 1 config delay 150 plr 0.1 bw 50000byte/s
+dnctl pipe 1 config delay 150 plr 0.2 bw 50000byte/s
 
 # Activate PF
 pfctl -E

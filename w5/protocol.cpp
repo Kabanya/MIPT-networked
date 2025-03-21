@@ -60,6 +60,17 @@ void send_snapshot(ENetPeer *peer, uint16_t eid, float x, float y, float ori)
   enet_peer_send(peer, 1, packet);
 }
 
+void send_time_msec(ENetPeer *peer, uint32_t timeMsec)
+{
+  ENetPacket *packet = enet_packet_create(nullptr, sizeof(uint8_t) + sizeof(uint32_t),
+                                                   ENET_PACKET_FLAG_RELIABLE);
+  uint8_t *ptr = packet->data;
+  *ptr = E_SERVER_TO_CLIENT_TIME_MSEC; ptr += sizeof(uint8_t);
+  memcpy(ptr, &timeMsec, sizeof(uint32_t)); ptr += sizeof(uint32_t);
+
+  enet_peer_send(peer, 0, packet);
+}
+
 MessageType get_packet_type(ENetPacket *packet)
 {
   return (MessageType)*packet->data;
@@ -92,5 +103,11 @@ void deserialize_snapshot(ENetPacket *packet, uint16_t &eid, float &x, float &y,
   x = *(float*)(ptr); ptr += sizeof(float);
   y = *(float*)(ptr); ptr += sizeof(float);
   ori = *(float*)(ptr); ptr += sizeof(float);
+}
+
+void deserialize_time_msec(ENetPacket *packet, uint32_t &timeMsec)
+{
+  uint8_t *ptr = packet->data; ptr += sizeof(uint8_t);
+  timeMsec = *(uint32_t*)(ptr); ptr += sizeof(uint32_t);
 }
 

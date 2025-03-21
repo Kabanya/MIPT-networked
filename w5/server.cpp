@@ -27,7 +27,7 @@ void on_join(ENetPacket *packet, ENetPeer *peer, ENetHost *host)
                    0x00000044 * (rand() % 5);
   float x = (rand() % 4) * 5.f;
   float y = (rand() % 4) * 5.f;
-  Entity ent = {color, x, y, 0.f, (rand() / RAND_MAX) * 3.141592654f, 0.f, 0.f, newEid};
+  Entity ent = {color, x, y, 0.f, (rand() / RAND_MAX) * 3.141592654f, 0.f, 0.f, 0.f, 0.f, newEid};
   entities.push_back(ent);
 
   controlledMap[newEid] = peer;
@@ -51,6 +51,58 @@ void on_input(ENetPacket *packet)
       e.thr = thr;
       e.steer = steer;
     }
+}
+
+static void update_net(ENetHost* server)
+{
+  ENetEvent event;
+  while (enet_host_service(server, &event, 0) > 0)
+  {
+    switch (event.type)
+    {
+    case ENET_EVENT_TYPE_CONNECT:
+      printf("Connection with %x:%u established\n", event.peer->address.host, event.peer->address.port);
+      break;
+    case ENET_EVENT_TYPE_RECEIVE:
+      switch (get_packet_type(event.packet))
+      {
+        case E_CLIENT_TO_SERVER_JOIN:
+          on_join(event.packet, event.peer, server);
+          break;
+        case E_CLIENT_TO_SERVER_INPUT:
+          on_input(event.packet);
+          break;
+      };
+      enet_packet_destroy(event.packet);
+      break;
+    default:
+      break;
+    };
+  }
+}
+
+static void simulate_world(ENetHost* server, float dt)
+{
+  for (Entity &e : entities)
+  {
+    // simulate
+    simulate_entity(e, dt);
+    // send
+    for (size_t i = 0; i < server->peerCount; ++i)
+    {
+      ENetPeer *peer = &server->peers[i];
+      // skip this here in this implementation
+      //if (controlledMap[e.eid] != peer)
+      send_snapshot(peer, e.eid, e.x, e.y, e.ori);
+    }
+  }
+}
+
+static void update_time(ENetHost* server, uint32_t curTime)
+{
+  // We can send it less often too
+  for (size_t i = 0; i < server->peerCount; ++i)
+    send_time_msec(&server->peers[i], curTime);
 }
 
 int main(int argc, const char **argv)
@@ -79,44 +131,11 @@ int main(int argc, const char **argv)
     uint32_t curTime = enet_time_get();
     float dt = (curTime - lastTime) * 0.001f;
     lastTime = curTime;
-    ENetEvent event;
-    while (enet_host_service(server, &event, 0) > 0)
-    {
-      switch (event.type)
-      {
-      case ENET_EVENT_TYPE_CONNECT:
-        printf("Connection with %x:%u established\n", event.peer->address.host, event.peer->address.port);
-        break;
-      case ENET_EVENT_TYPE_RECEIVE:
-        switch (get_packet_type(event.packet))
-        {
-          case E_CLIENT_TO_SERVER_JOIN:
-            on_join(event.packet, event.peer, server);
-            break;
-          case E_CLIENT_TO_SERVER_INPUT:
-            on_input(event.packet);
-            break;
-        };
-        enet_packet_destroy(event.packet);
-        break;
-      default:
-        break;
-      };
-    }
-    static int t = 0;
-    for (Entity &e : entities)
-    {
-      // simulate
-      simulate_entity(e, dt);
-      // send
-      for (size_t i = 0; i < server->peerCount; ++i)
-      {
-        ENetPeer *peer = &server->peers[i];
-        // skip this here in this implementation
-        //if (controlledMap[e.eid] != peer)
-        send_snapshot(peer, e.eid, e.x, e.y, e.ori);
-      }
-    }
+
+    update_net(server);
+    simulate_world(server, dt);
+    update_time(server, curTime);
+
     usleep(100000);
   }
 

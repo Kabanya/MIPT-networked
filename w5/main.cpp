@@ -11,16 +11,17 @@
 
 
 static std::vector<Entity> entities;
+static std::unordered_map<uint16_t, size_t> indexMap;
 static uint16_t my_entity = invalid_entity;
 
 void on_new_entity_packet(ENetPacket *packet)
 {
   Entity newEntity;
   deserialize_new_entity(packet, newEntity);
-  // TODO: Direct adressing, of course!
-  for (const Entity &e : entities)
-    if (e.eid == newEntity.eid)
-      return; // don't need to do anything, we already have entity
+  auto itf = indexMap.find(newEntity.eid);
+  if (itf != indexMap.end())
+    return; // don't need to do anything, we already have entity
+  indexMap[newEntity.eid] = entities.size();
   entities.push_back(newEntity);
 }
 
@@ -29,19 +30,112 @@ void on_set_controlled_entity(ENetPacket *packet)
   deserialize_set_controlled_entity(packet, my_entity);
 }
 
+template<typename Callable>
+static void get_entity(uint16_t eid, Callable c)
+{
+  auto itf = indexMap.find(eid);
+  if (itf != indexMap.end())
+    c(entities[itf->second]);
+}
+
 void on_snapshot(ENetPacket *packet)
 {
   uint16_t eid = invalid_entity;
   float x = 0.f; float y = 0.f; float ori = 0.f;
   deserialize_snapshot(packet, eid, x, y, ori);
-  // TODO: Direct adressing, of course!
-  for (Entity &e : entities)
-    if (e.eid == eid)
-    {
+  get_entity(eid, [&](Entity& e)
+  {
       e.x = x;
       e.y = y;
       e.ori = ori;
-    }
+  });
+}
+
+static void on_time(ENetPacket *packet, ENetPeer* peer)
+{
+  uint32_t timeMsec;
+  deserialize_time_msec(packet, timeMsec);
+  enet_time_set(timeMsec + peer->lastRoundTripTime / 2);
+}
+
+static void draw_entity(const Entity& e)
+{
+  const float shipLen = 3.f;
+  const float shipWidth = 2.f;
+  const Vector2 fwd = Vector2{cosf(e.ori), sinf(e.ori)};
+  const Vector2 left = Vector2{-fwd.y, fwd.x};
+  DrawTriangle(Vector2{e.x + fwd.x * shipLen * 0.5f, e.y + fwd.y * shipLen * 0.5f},
+               Vector2{e.x - fwd.x * shipLen * 0.5f - left.x * shipWidth * 0.5f, e.y - fwd.y * shipLen * 0.5f - left.y * shipWidth * 0.5f},
+               Vector2{e.x - fwd.x * shipLen * 0.5f + left.x * shipWidth * 0.5f, e.y - fwd.y * shipLen * 0.5f + left.y * shipWidth * 0.5f},
+               GetColor(e.color));
+}
+
+static void update_net(ENetHost* client, ENetPeer* serverPeer)
+{
+  ENetEvent event;
+  while (enet_host_service(client, &event, 0) > 0)
+  {
+    switch (event.type)
+    {
+    case ENET_EVENT_TYPE_CONNECT:
+      printf("Connection with %x:%u established\n", event.peer->address.host, event.peer->address.port);
+      send_join(serverPeer);
+      break;
+    case ENET_EVENT_TYPE_RECEIVE:
+      switch (get_packet_type(event.packet))
+      {
+      case E_SERVER_TO_CLIENT_NEW_ENTITY:
+        on_new_entity_packet(event.packet);
+        break;
+      case E_SERVER_TO_CLIENT_SET_CONTROLLED_ENTITY:
+        on_set_controlled_entity(event.packet);
+        break;
+      case E_SERVER_TO_CLIENT_SNAPSHOT:
+        on_snapshot(event.packet);
+        break;
+      case E_SERVER_TO_CLIENT_TIME_MSEC:
+        on_time(event.packet, event.peer);
+        break;
+      };
+      enet_packet_destroy(event.packet);
+      break;
+    default:
+      break;
+    };
+  }
+}
+
+static void simulate_world(ENetPeer* serverPeer)
+{
+  if (my_entity != invalid_entity)
+  {
+    bool left = IsKeyDown(KEY_LEFT);
+    bool right = IsKeyDown(KEY_RIGHT);
+    bool up = IsKeyDown(KEY_UP);
+    bool down = IsKeyDown(KEY_DOWN);
+    get_entity(my_entity, [&](Entity& e)
+    {
+        // Update
+        float thr = (up ? 1.f : 0.f) + (down ? -1.f : 0.f);
+        float steer = (left ? -1.f : 0.f) + (right ? 1.f : 0.f);
+
+        // Send
+        send_entity_input(serverPeer, my_entity, thr, steer);
+    });
+  }
+}
+
+static void draw_world(const Camera2D& camera)
+{
+  BeginDrawing();
+    ClearBackground(GRAY);
+    BeginMode2D(camera);
+
+      for (const Entity &e : entities)
+        draw_entity(e);
+
+    EndMode2D();
+  EndDrawing();
 }
 
 int main(int argc, const char **argv)
@@ -90,71 +184,15 @@ int main(int argc, const char **argv)
   camera.rotation = 0.f;
   camera.zoom = 10.f;
 
-
   SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
 
-  bool connected = false;
   while (!WindowShouldClose())
   {
-    float dt = GetFrameTime();
-    ENetEvent event;
-    while (enet_host_service(client, &event, 0) > 0)
-    {
-      switch (event.type)
-      {
-      case ENET_EVENT_TYPE_CONNECT:
-        printf("Connection with %x:%u established\n", event.peer->address.host, event.peer->address.port);
-        send_join(serverPeer);
-        connected = true;
-        break;
-      case ENET_EVENT_TYPE_RECEIVE:
-        switch (get_packet_type(event.packet))
-        {
-        case E_SERVER_TO_CLIENT_NEW_ENTITY:
-          on_new_entity_packet(event.packet);
-          break;
-        case E_SERVER_TO_CLIENT_SET_CONTROLLED_ENTITY:
-          on_set_controlled_entity(event.packet);
-          break;
-        case E_SERVER_TO_CLIENT_SNAPSHOT:
-          on_snapshot(event.packet);
-          break;
-        };
-        break;
-      default:
-        break;
-      };
-    }
-    if (my_entity != invalid_entity)
-    {
-      bool left = IsKeyDown(KEY_LEFT);
-      bool right = IsKeyDown(KEY_RIGHT);
-      bool up = IsKeyDown(KEY_UP);
-      bool down = IsKeyDown(KEY_DOWN);
-      // TODO: Direct adressing, of course!
-      for (Entity &e : entities)
-        if (e.eid == my_entity)
-        {
-          // Update
-          float thr = (up ? 1.f : 0.f) + (down ? -1.f : 0.f);
-          float steer = (left ? -1.f : 0.f) + (right ? 1.f : 0.f);
+    float dt = GetFrameTime(); // for future use and making it look smooth
 
-          // Send
-          send_entity_input(serverPeer, my_entity, thr, steer);
-        }
-    }
-
-    BeginDrawing();
-      ClearBackground(GRAY);
-      BeginMode2D(camera);
-        for (const Entity &e : entities)
-        {
-          const Rectangle rect = {e.x, e.y, 3.f, 1.f};
-          DrawRectanglePro(rect, {0.f, 0.5f}, e.ori * 180.f / PI, GetColor(e.color));
-        }
-
-      EndMode2D();
-    EndDrawing();
+    update_net(client, serverPeer);
+    simulate_world(serverPeer);
+    draw_world(camera);
   }
 
   CloseWindow();

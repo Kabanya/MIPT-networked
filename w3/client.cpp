@@ -15,7 +15,7 @@ void send_array_packet(ENetPeer *peer, const std::vector<uint32_t> &numbers)
 void send_int_packet(ENetPeer *peer, int num)
 {
   std::string str = std::string("packet#") + std::to_string(num);
-  ENetPacket *packet = enet_packet_create(str.c_str(), str.size() + 1, ENET_PACKET_FLAG_UNSEQUENCED);
+  ENetPacket *packet = enet_packet_create(str.c_str(), str.size() + 1, ENET_PACKET_FLAG_RELIABLE);
 
   enet_peer_send(peer, 1, packet);
 }
