@@ -11,13 +11,19 @@ SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(W4_SOURCES
     main.cpp
     protocol.cpp
+    bitstream.cpp
     )
 
 set(W4_SERVER_SOURCES
     server.cpp
     protocol.cpp
+    bitstream.cpp
     )
 
+set(W4_BITSTREAM_SOURCES
+    bitstream.cpp
+    )
+    
 
 include_directories("../3rdParty/enet/include")
 
@@ -34,8 +40,10 @@ add_executable(w4_server ${W4_SERVER_SOURCES})
 target_link_libraries(w4_server PUBLIC project_options project_warnings)
 target_link_libraries(w4_server PUBLIC enet)
 
+add_executable(w4_bitstream ${W4_BITSTREAM_SOURCES})
+target_link_libraries(w4_bitstream PUBLIC project_options project_warnings)
+
 if(MSVC)
   target_link_libraries(w4 PUBLIC ws2_32.lib winmm.lib)
   target_link_libraries(w4_server PUBLIC ws2_32.lib winmm.lib)
 endif()
-

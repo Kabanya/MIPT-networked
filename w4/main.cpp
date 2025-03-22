@@ -40,7 +40,7 @@ void on_snapshot(ENetPacket *packet)
 {
   uint16_t eid = invalid_entity;
   float x = 0.f; float y = 0.f;
-  deserialize_snapshot(packet, eid, x, y);
+  deserialize_snapshot(packet, eid, x, y); //надо заменить на снепшот всех
   get_entity(eid, [&](Entity& e)
   {
     e.x = x;
@@ -48,7 +48,8 @@ void on_snapshot(ENetPacket *packet)
   });
 }
 
-int main(int argc, const char **argv)
+// int main(int argc, const char **argv)
+int main()
 {
   if (enet_initialize() != 0)
   {

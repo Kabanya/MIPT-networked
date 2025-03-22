@@ -1,5 +1,5 @@
 #include <enet/enet.h>
-#include <iostream>
+// #include <iostream>
 #include "entity.h"
 #include "protocol.h"
 #include <stdlib.h>
@@ -56,7 +56,8 @@ void on_state(ENetPacket *packet)
     }
 }
 
-int main(int argc, const char **argv)
+// int main(int argc, const char **argv)
+int main()
 {
   if (enet_initialize() != 0)
   {

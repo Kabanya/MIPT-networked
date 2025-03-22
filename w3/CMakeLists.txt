@@ -16,7 +16,6 @@ set(W3_SERVER_SOURCES
     server.cpp
     )
 
-
 include_directories("../3rdParty/enet/include")
 
 if(MSVC)
