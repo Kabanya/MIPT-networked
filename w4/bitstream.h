@@ -75,11 +75,33 @@ public:
     ///@}
 
     /// @name Полезные методы
-    const std::uint8_t* Data() const;
-    size_t GetSizeBytes() const;
-    size_t GetSizeBits() const;
+    /// @{
+    /**
+     * @brief Возвращает указатель на данные в потоке
+     * @return Указатель на данные в потоке
+     */
+    const std::uint8_t* GetData() const;
+    /**
+     * @brief Возвращает размер данных в потоке в байтах
+     * @return Размер данных в потоке в байтах
+     */
+    std::size_t GetSizeBytes() const;
+    /**
+     * @brief Возвращает размер данных в потоке в битах
+     * @return Размер данных в потоке в битах
+     */
+    std::size_t GetSizeBits() const;
+    /**
+     * @brief Сбрасывает указатель чтения в начало потока
+     */
     void ResetRead();
+    /**
+     * @brief Сбрасывает указатель записи в начало потока
+     */
     void ResetWrite();
+    /**
+     * @brief Очищает поток
+     */
     void Clear();
     ///@}
 };
