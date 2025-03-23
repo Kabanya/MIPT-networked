@@ -33,36 +33,75 @@ bool BitStream::ReadBit()
     return result;
 }
 
+void BitStream::WriteBits(std::uint32_t value, std::uint8_t bitCount)
+{
+    for (std::uint8_t i = 0; i < bitCount; ++i)
+    {
+        WriteBit((value & (1 << i)) != 0);
+    }
+}
+
+std::uint32_t BitStream::ReadBits(std::uint8_t bitCount)
+{
+    std::uint32_t value = 0;
+    for (std::uint8_t i = 0; i < bitCount; ++i)
+    {
+        if (ReadBit())
+            value |= (1 << i);
+    }
+    return value;
+}
+
 void BitStream::WriteBytes(const void* data, size_t size)
 {
-    const std::uint8_t* bytes = static_cast<const std::uint8_t*>(data);
-    for (size_t i = 0; i < size; i++)
+    size_t byteIndex = m_WritePose / 8;
+    
+    if (byteIndex + size > buffer.size())
     {
-        WriteBit(bytes[i] & 0x01);
-        WriteBit(bytes[i] & 0x02);
-        WriteBit(bytes[i] & 0x04);
-        WriteBit(bytes[i] & 0x08);
-        WriteBit(bytes[i] & 0x10);
-        WriteBit(bytes[i] & 0x20);
-        WriteBit(bytes[i] & 0x40);
-        WriteBit(bytes[i] & 0x80);
+        buffer.resize(byteIndex + size);
     }
+    
+    std::memcpy(buffer.data() + byteIndex, data, size);
+    
+    m_WritePose += size * 8;
 }
 
 void BitStream::ReadBytes(void* data, size_t size)
 {
-    std::uint8_t* bytes = static_cast<std::uint8_t*>(data);
-    for (size_t i = 0; i < size; i++)
+    size_t byteIndex = m_ReadPose / 8;
+    
+    // Ensure we have enough data
+    if (byteIndex + size > buffer.size())
     {
-        bytes[i] = 0;
-        bytes[i] |= ReadBit() ? 0x01 : 0;
-        bytes[i] |= ReadBit() ? 0x02 : 0;
-        bytes[i] |= ReadBit() ? 0x04 : 0;
-        bytes[i] |= ReadBit() ? 0x08 : 0;
-        bytes[i] |= ReadBit() ? 0x10 : 0;
-        bytes[i] |= ReadBit() ? 0x20 : 0;
-        bytes[i] |= ReadBit() ? 0x40 : 0;
-        bytes[i] |= ReadBit() ? 0x80 : 0;
+        throw std::out_of_range("Attempting to read beyond buffer");
+    }
+    
+    // Copy bytes
+    std::memcpy(data, buffer.data() + byteIndex, size);
+    
+    // Update bit position
+    m_ReadPose += size * 8;
+}
+
+
+void BitStream::Write(const std::string& value)
+{
+    uint32_t length = static_cast<uint32_t>(value.length());
+    WriteBits(length, 32);
+    if (length > 0)
+    {
+        WriteBytes(value.data(), length);
+    }
+}
+
+void BitStream::Read(std::string& value)
+{
+    std::uint8_t size = 0;
+    Read(size);
+    value.resize(size);
+    for (std::uint8_t i = 0; i < size; i++)
+    {
+        Read(value[i]);
     }
 }
 

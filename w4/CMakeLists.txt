@@ -44,7 +44,7 @@ target_link_libraries(w4_server PUBLIC enet)
 # add_executable(w4_bitstream ${W4_BITSTREAM_SOURCES})
 # target_link_libraries(w4_bitstream PUBLIC project_options project_warnings)
 
-add_library(w4_bitstream ${W4_BITSTREAM_SOURCES})  # Создаём библиотеку вместо исполняемого файла
+add_library(w4_bitstream ${W4_BITSTREAM_SOURCES}) 
 target_link_libraries(w4_bitstream PUBLIC project_options project_warnings)
 
 

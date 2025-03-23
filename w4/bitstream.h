@@ -13,6 +13,12 @@ private:
 
 public:
     BitStream() = default;
+    BitStream(const BitStream&) = delete;
+    BitStream(const std::uint8_t* data, std::size_t size)
+    {
+        buffer.assign(data, data + size);
+    }
+
     // BitStream();
     ~BitStream() = default;
 
@@ -30,6 +36,9 @@ public:
     bool ReadBit();
     ///@}
 
+    void WriteBits(std::uint32_t value, std::uint8_t bitCount);
+    std::uint32_t ReadBits(std::uint8_t bitCount);
+
     ///@name Операции с байтами
     ///@{
     /**
@@ -38,11 +47,6 @@ public:
      * @param size Размер данных в байтах
      */
     void WriteBytes(const void* data, size_t size);
-    /**
-     * @brief Читает массив байт из потока
-     * @param data Указатель на буфер для чтения
-     * @param size Размер данных в байтах
-     */
     void ReadBytes(void* data, size_t size);
     ///@}
 
@@ -54,7 +58,7 @@ public:
      * @tparam T Тип значения
      * @param value Значение для записи
      */
-    template <typename T>
+    template<typename T>
     void Write(const T& value)
     {
         WriteBytes(&value, sizeof(T));
@@ -66,13 +70,19 @@ public:
      * @return Прочитанное значение
      */
     template <typename T>
-    T Read()
+    void Read(T& value)
     {
-        T value;
         ReadBytes(&value, sizeof(T));
-        return value;
     }
     ///@}
+
+    /**
+     * Специализация шаблона для записи строки
+     * @brief Записывает строку в поток
+     * @param value Строка для записи
+     */
+    void Write(const std::string& value);
+    void Read(std::string& value);
 
     /// @name Полезные методы
     /// @{
