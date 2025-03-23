@@ -1,5 +1,6 @@
 #include <functional>
 #include <algorithm> // min/max
+#include <cstdio>    // printf
 #include "raylib.h"
 #include <enet/enet.h>
 

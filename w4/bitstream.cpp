@@ -78,7 +78,7 @@ std::size_t BitStream::GetSizeBits() const
 
 std::size_t BitStream::GetSizeBytes() const
 {
-    return buffer.size() * 8;
+    return buffer.size();
 }
 
 void BitStream::ResetRead()

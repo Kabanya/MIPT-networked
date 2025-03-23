@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <vector>
 #include <map>
+#include <stdio.h>
+#include <cmath>
 
 static std::vector<Entity> entities;
 static std::map<uint16_t, ENetPeer*> controlledMap;
