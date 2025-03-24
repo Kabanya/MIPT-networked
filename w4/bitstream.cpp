@@ -1,9 +1,18 @@
 #include "bitstream.h"
+#include <cstring>
+#include <cmath>
+
+BitStream::BitStream() = default;
+
+BitStream::BitStream(const std::uint8_t* data, size_t size)
+{
+    buffer.assign(data, data + size);
+}
 
 void BitStream::WriteBit(bool value)
 {
-    std::size_t byteIndex = m_WritePose / 8;
-    std::size_t bitIndex = m_WritePose % 8;
+    size_t byteIndex = m_WritePose / 8;
+    size_t bitIndex = m_WritePose % 8;
 
     if (byteIndex >= buffer.size())
     {
@@ -22,29 +31,30 @@ bool BitStream::ReadBit()
 {
     size_t byteIndex = m_ReadPose / 8;
     size_t bitIndex = m_ReadPose % 8;
-
+    
     if (byteIndex >= buffer.size())
     {
-        return false;
+        throw std::out_of_range("Attempting to read beyond buffer");
     }
-
-    bool result = (buffer[byteIndex] & (1 << bitIndex)) != 0;
+    
+    bool value = (buffer[byteIndex] & (1 << bitIndex)) != 0;
     m_ReadPose++;
-    return result;
+    
+    return value;
 }
 
-void BitStream::WriteBits(std::uint32_t value, std::uint8_t bitCount)
+void BitStream::WriteBits(uint32_t value, uint8_t bitCount)
 {
-    for (std::uint8_t i = 0; i < bitCount; ++i)
+    for (uint8_t i = 0; i < bitCount; ++i)
     {
         WriteBit((value & (1 << i)) != 0);
     }
 }
 
-std::uint32_t BitStream::ReadBits(std::uint8_t bitCount)
+uint32_t BitStream::ReadBits(uint8_t bitCount)
 {
-    std::uint32_t value = 0;
-    for (std::uint8_t i = 0; i < bitCount; ++i)
+    uint32_t value = 0;
+    for (uint8_t i = 0; i < bitCount; ++i)
     {
         if (ReadBit())
             value |= (1 << i);
@@ -54,40 +64,51 @@ std::uint32_t BitStream::ReadBits(std::uint8_t bitCount)
 
 void BitStream::WriteBytes(const void* data, size_t size)
 {
+    AlignWrite();   
     size_t byteIndex = m_WritePose / 8;
     
     if (byteIndex + size > buffer.size())
     {
         buffer.resize(byteIndex + size);
     }
-    
     std::memcpy(buffer.data() + byteIndex, data, size);
-    
     m_WritePose += size * 8;
 }
 
 void BitStream::ReadBytes(void* data, size_t size)
 {
+    AlignRead();
     size_t byteIndex = m_ReadPose / 8;
-    
-    // Ensure we have enough data
+
     if (byteIndex + size > buffer.size())
     {
         throw std::out_of_range("Attempting to read beyond buffer");
     }
-    
-    // Copy bytes
-    std::memcpy(data, buffer.data() + byteIndex, size);
-    
-    // Update bit position
+
+    std::memcpy(data, buffer.data() + byteIndex, size);    
     m_ReadPose += size * 8;
 }
 
+void BitStream::AlignWrite()
+{
+    if (m_WritePose % 8 != 0)
+    {
+        m_WritePose = (m_WritePose + 7) & ~7; // Round up to next byte
+    }
+}
+
+void BitStream::AlignRead()
+{
+    if (m_ReadPose % 8 != 0)
+    {
+        m_ReadPose = (m_ReadPose + 7) & ~7; // Round up to next byte
+    }
+}
 
 void BitStream::Write(const std::string& value)
 {
     uint32_t length = static_cast<uint32_t>(value.length());
-    WriteBits(length, 32);
+    Write<uint32_t>(length);
     if (length > 0)
     {
         WriteBytes(value.data(), length);
@@ -96,38 +117,66 @@ void BitStream::Write(const std::string& value)
 
 void BitStream::Read(std::string& value)
 {
-    std::uint8_t size = 0;
-    Read(size);
-    value.resize(size);
-    for (std::uint8_t i = 0; i < size; i++)
+    uint32_t length;
+    Read<uint32_t>(length);
+    if (length > 0)
     {
-        Read(value[i]);
+        value.resize(length);
+        ReadBytes(&value[0], length);
+    }
+    else
+    {
+        value.clear();
     }
 }
+
+void BitStream::WriteBoolArray(const std::vector<bool>& bools)
+{
+    Write<uint32_t>(static_cast<uint32_t>(bools.size()));   
+    for (bool b : bools)
+    {
+        WriteBit(b);
+    }
+}
+
+std::vector<bool> BitStream::ReadBoolArray()
+{
+    uint32_t size;
+    Read<uint32_t>(size);
+    std::vector<bool> bools(size);
+    for (uint32_t i = 0; i < size; ++i)
+    {
+        bools[i] = ReadBit();
+    }
+    
+    return bools;
+}
+
+
 
 const std::uint8_t* BitStream::GetData() const
 {
     return buffer.data();
 }
 
-std::size_t BitStream::GetSizeBits() const
+size_t BitStream::GetSizeBytes() const
 {
-    return buffer.size() * 8;
+    return (m_WritePose + 7) / 8; // Round up to nearest byte
 }
 
-std::size_t BitStream::GetSizeBytes() const
+size_t BitStream::GetSizeBits() const
 {
-    return buffer.size();
-}
-
-void BitStream::ResetRead()
-{
-    m_ReadPose = 0;
+    return m_WritePose;
 }
 
 void BitStream::ResetWrite()
 {
     m_WritePose = 0;
+}
+
+void BitStream::ResetRead()
+{
+    m_ReadPose = 0;
 }
 
 void BitStream::Clear()
