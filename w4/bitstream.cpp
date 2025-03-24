@@ -152,8 +152,6 @@ std::vector<bool> BitStream::ReadBoolArray()
     return bools;
 }
 
-
-
 const std::uint8_t* BitStream::GetData() const
 {
     return buffer.data();

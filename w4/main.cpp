@@ -19,7 +19,7 @@ void on_new_entity_packet(ENetPacket *packet)
   deserialize_new_entity(packet, newEntity);
   auto itf = indexMap.find(newEntity.eid);
   if (itf != indexMap.end())
-    return; // don't need to do anything, we already have entity
+    return; // ничего не делаем если есть entity
   indexMap[newEntity.eid] = entities.size();
   entities.push_back(newEntity);
 }
@@ -40,12 +40,49 @@ static void get_entity(uint16_t eid, Callable c)
 void on_snapshot(ENetPacket *packet)
 {
   uint16_t eid = invalid_entity;
-  float x = 0.f; float y = 0.f;
-  deserialize_snapshot(packet, eid, x, y); //надо заменить на снепшот всех
+  float x = 0.f; float y = 0.f; float size = 0.f;
+  deserialize_snapshot(packet, eid, x, y, size);
   get_entity(eid, [&](Entity& e)
   {
     e.x = x;
     e.y = y;
+    e.size = size; 
+  });
+}
+
+void on_entity_devoured(ENetPacket *packet)
+{
+  uint16_t devoured_eid = invalid_entity;
+  uint16_t devourer_eid = invalid_entity;
+  float new_size = 0.f;
+  float new_x = 0.f;
+  float new_y = 0.f;
+  
+  deserialize_entity_devoured(packet, devoured_eid, devourer_eid, new_size, new_x, new_y);
+  
+  get_entity(devourer_eid, [&](Entity& e)
+  {
+    e.size = new_size;
+  });
+  
+  get_entity(devoured_eid, [&](Entity& e)
+  {
+    e.x = new_x;
+    e.y = new_y;
+  });
+}
+
+// Handle score update event
+void on_score_update(ENetPacket *packet)
+{
+  uint16_t eid = invalid_entity;
+  int score = 0;
+  
+  deserialize_score_update(packet, eid, score);
+  
+  get_entity(eid, [&](Entity& e)
+  {
+    e.score = score;
   });
 }
 
@@ -125,6 +162,12 @@ int main()
         case E_SERVER_TO_CLIENT_SNAPSHOT:
           on_snapshot(event.packet);
           break;
+        case E_SERVER_TO_CLIENT_ENTITY_DEVOURED:
+          on_entity_devoured(event.packet);
+          break;
+        case E_SERVER_TO_CLIENT_SCORE_UPDATE:
+          on_score_update(event.packet);
+          break;
         };
         break;
       default:
@@ -139,11 +182,9 @@ int main()
       bool down = IsKeyDown(KEY_DOWN);
       get_entity(my_entity, [&](Entity& e)
       {
-        // Update
         e.x += ((left ? -dt : 0.f) + (right ? +dt : 0.f)) * 100.f;
         e.y += ((up ? -dt : 0.f) + (down ? +dt : 0.f)) * 100.f;
 
-        // Send
         send_entity_state(serverPeer, my_entity, e.x, e.y);
         camera.target.x = e.x;
         camera.target.y = e.y;
@@ -156,11 +197,27 @@ int main()
       BeginMode2D(camera);
         for (const Entity &e : entities)
         {
-          const Rectangle rect = {e.x, e.y, 10.f, 10.f};
-          DrawRectangleRec(rect, GetColor(e.color));
+          DrawCircle((int)e.x, (int)e.y, e.size, GetColor(e.color));
+          
+          char idText[10];
+          sprintf(idText, "%d", e.eid);
+          DrawText(idText, (int)(e.x - 10), (int)(e.y - 10), 10, WHITE);
         }
-
       EndMode2D();
+      
+      if (my_entity != invalid_entity)
+      {
+        get_entity(my_entity, [&](Entity& e)
+        {
+          char scoreText[50];
+          sprintf(scoreText, "Score: %d", e.score);
+          DrawText(scoreText, 10, 10, 20, WHITE);
+          
+          char sizeText[50];
+          sprintf(sizeText, "Size: %.1f", e.size);
+          DrawText(sizeText, 10, 40, 20, WHITE);
+        });
+      }
     EndDrawing();
   }
 
