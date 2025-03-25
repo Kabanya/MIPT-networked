@@ -12,6 +12,11 @@
 static std::vector<Entity> entities;
 static std::map<uint16_t, ENetPeer*> controlledMap;
 
+float random_spawn(const float _max_size = 10.f)
+{
+  return (rand() % 100 - 50) * _max_size;
+}
+
 static uint16_t create_random_entity()
 {
   uint16_t newEid = entities.size();
@@ -19,8 +24,8 @@ static uint16_t create_random_entity()
                    0x00440000 * (1 + rand() % 4) +
                    0x00004400 * (1 + rand() % 4) +
                    0x00000044 * (1 + rand() % 4);
-  float x = (rand() % 40 - 20) * 5.f;
-  float y = (rand() % 40 - 20) * 5.f;
+  float x = random_spawn();
+  float y = random_spawn();
   float size = 5.f + (rand() % 6);   // Random size between 5 and 10
   
   Entity ent;
@@ -156,13 +161,14 @@ int main()
         e.y += dirY * spd * dt;
         if (fabsf(diffX) < 10.f && fabsf(diffY) < 10.f)
         {
-          e.targetX = (rand() % 40 - 20) * 15.f;
-          e.targetY = (rand() % 40 - 20) * 15.f;
+          e.targetX = random_spawn();
+          e.targetY = random_spawn();
         }
       }
     }
     
     bool collision_occurred = false;
+    // Check for collisions
     for (size_t i = 0; i < entities.size() && !collision_occurred; i++)
     {
       for (size_t j = 0; j < entities.size(); j++)
