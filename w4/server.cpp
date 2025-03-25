@@ -100,12 +100,54 @@ int main()
   bool created_ai_entities = false;
   constexpr int numAi = 10;
 
+  const int GAME_DURATION = 60; // game timer
+  int game_time_remaining = GAME_DURATION;
+  uint32_t last_time_update = 0;
+  bool game_over = false;
+
   uint32_t lastTime = enet_time_get();
   while (true)
   {
     uint32_t curTime = enet_time_get();
     float dt = (curTime - lastTime) * 0.001f;
     lastTime = curTime;
+    
+    if (!game_over && created_ai_entities && curTime - last_time_update >= 1000) {
+      game_time_remaining--;
+      last_time_update = curTime;
+      
+      // Send time updates to all clients
+      for (size_t i = 0; i < server->peerCount; ++i) {
+        ENetPeer *peer = &server->peers[i];
+        send_game_time(peer, game_time_remaining);
+      }
+      
+      printf("Game time remaining: %d seconds\n", game_time_remaining);
+      
+      if (game_time_remaining <= 0) {
+        game_over = true;
+        
+        // Find highest score
+        uint16_t winner_eid = invalid_entity;
+        int highest_score = -1;
+        
+        for (const Entity &e : entities) {
+          if (e.score > highest_score) {
+            highest_score = e.score;
+            winner_eid = e.eid;
+          }
+        }
+        
+        printf("Game over! Winner is entity %d with score %d\n", 
+               winner_eid, highest_score);
+               
+        for (size_t i = 0; i < server->peerCount; ++i) {
+          ENetPeer *peer = &server->peers[i];
+          send_game_over(peer, winner_eid, highest_score);
+        }
+      }
+    }
+    
     ENetEvent event;
     while (enet_host_service(server, &event, 0) > 0)
     {
@@ -120,6 +162,7 @@ int main()
           {
             uint16_t eid = create_random_entity();
             entities[eid].serverControlled = true;
+            entities[eid].score = 0;
             controlledMap[eid] = nullptr;
           }
           created_ai_entities = true;
@@ -139,6 +182,8 @@ int main()
           case E_SERVER_TO_CLIENT_SNAPSHOT:
           case E_SERVER_TO_CLIENT_ENTITY_DEVOURED:
           case E_SERVER_TO_CLIENT_SCORE_UPDATE:
+          case E_SERVER_TO_CLIENT_GAME_TIME:
+          case E_SERVER_TO_CLIENT_GAME_OVER:
             printf("Warning: Received server-to-client message on server\n");
             break;
         };
@@ -168,7 +213,6 @@ int main()
     }
     
     bool collision_occurred = false;
-    // Check for collisions
     for (size_t i = 0; i < entities.size() && !collision_occurred; i++)
     {
       for (size_t j = 0; j < entities.size(); j++)
@@ -182,7 +226,6 @@ int main()
           continue;
         }
         
-        // distance between entity centers
         float dx = e1.x - e2.x;
         float dy = e1.y - e2.y;
         float distance = sqrt(dx*dx + dy*dy);
@@ -218,19 +261,27 @@ int main()
             
             devoured->size = 5.0f + (rand() % 5); // Random size between 5 and 10
             
+            if (!devoured->serverControlled) {
+              devoured->score = 0;
+            }
+            
             if (!devourer->serverControlled)
             {
               devourer->score += static_cast<int>(size_gain);
-              
-              ENetPeer *peer = controlledMap[devourer->eid];
-              if (peer)
-              {
-                send_score_update(peer, devourer->eid, devourer->score);
-              }
+            }
+            else
+            {
+              devourer->score += static_cast<int>(size_gain);
             }
             
-            devoured->x = (rand() % 40 - 20) * 5.f;
-            devoured->y = (rand() % 40 - 20) * 5.f;
+            for (size_t k = 0; k < server->peerCount; ++k)
+            {
+              ENetPeer *peer = &server->peers[k];
+              send_score_update(peer, devourer->eid, devourer->score);
+            }
+            
+            devoured->x = (rand() % 100 - 50) * 10.f;
+            devoured->y = (rand() % 100 - 50) * 10.f;
             
             for (size_t k = 0; k < server->peerCount; ++k)
             {
@@ -248,7 +299,6 @@ int main()
       }
     }
     
-    // Send snapshots of all entities to all clients
     for (const Entity &e : entities)
     {
       for (size_t i = 0; i < server->peerCount; ++i)

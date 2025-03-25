@@ -164,3 +164,41 @@ void deserialize_score_update(ENetPacket *packet, uint16_t &eid, int &score)
   bs.Read<uint16_t>(eid);
   bs.Read<int>(score);
 }
+
+void send_game_time(ENetPeer *peer, int seconds_remaining)
+{
+  BitStream bs;
+  bs.Write<uint8_t>(E_SERVER_TO_CLIENT_GAME_TIME);
+  bs.Write<int>(seconds_remaining);
+
+  ENetPacket *packet = enet_packet_create(bs.GetData(), bs.GetSizeBytes(), ENET_PACKET_FLAG_RELIABLE);
+  enet_peer_send(peer, 0, packet);
+}
+
+void send_game_over(ENetPeer *peer, uint16_t winner_eid, int winner_score)
+{
+  BitStream bs;
+  bs.Write<uint8_t>(E_SERVER_TO_CLIENT_GAME_OVER);
+  bs.Write<uint16_t>(winner_eid);
+  bs.Write<int>(winner_score);
+
+  ENetPacket *packet = enet_packet_create(bs.GetData(), bs.GetSizeBytes(), ENET_PACKET_FLAG_RELIABLE);
+  enet_peer_send(peer, 0, packet);
+}
+
+void deserialize_game_over(ENetPacket *packet, uint16_t &winner_eid, int &winner_score)
+{
+  BitStream bs(packet->data, packet->dataLength);
+  uint8_t type;
+  bs.Read<uint8_t>(type);
+  bs.Read<uint16_t>(winner_eid);
+  bs.Read<int>(winner_score);
+}
+
+void deserialize_game_time(ENetPacket *packet, int &seconds_remaining)
+{
+  BitStream bs(packet->data, packet->dataLength);
+  uint8_t type;
+  bs.Read<uint8_t>(type);
+  bs.Read<int>(seconds_remaining);
+}
