@@ -38,3 +38,8 @@ build/
 w1/client
 .gitignore
 w1/server
+.DS_Store
+
+.cache/
+3rdParty/raylib
+CMakeLists.txt.user
