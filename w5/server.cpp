@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <vector>
 #include <map>
+#include <chrono>
+using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
 static std::vector<Entity> entities;
 static std::map<uint16_t, ENetPeer*> controlledMap;
@@ -83,6 +85,7 @@ static void update_net(ENetHost* server)
 
 static void simulate_world(ENetHost* server, float dt)
 {
+  TimePoint curTime = std::chrono::steady_clock::now();
   for (Entity &e : entities)
   {
     // simulate
@@ -93,7 +96,7 @@ static void simulate_world(ENetHost* server, float dt)
       ENetPeer *peer = &server->peers[i];
       // skip this here in this implementation
       //if (controlledMap[e.eid] != peer)
-      send_snapshot(peer, e.eid, e.x, e.y, e.ori);
+      send_snapshot(peer, e.eid, e.x, e.y, e.ori, curTime);
     }
   }
 }

@@ -6,13 +6,30 @@
 #include <math.h>
 
 #include <vector>
+#include <chrono>
 #include "entity.h"
 #include "protocol.h"
 
+using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
+
+struct Snapshot
+{
+  uint16_t eid;
+  float x;
+  float y;
+  float ori;
+  TimePoint timestamp;
+
+  Snapshot() = default;
+  Snapshot(uint16_t eid, float x, float y, float ori, TimePoint timestamp)
+    : eid(eid), x(x), y(y), ori(ori), timestamp(timestamp) {}
+};
 
 static std::vector<Entity> entities;
 static std::unordered_map<uint16_t, size_t> indexMap;
 static uint16_t my_entity = invalid_entity;
+static std::unordered_map<uint16_t, std::vector<Snapshot>> snapshotHistory;
+constexpr std::chrono::milliseconds INTERPOLATION_TIME{200};
 
 void on_new_entity_packet(ENetPacket *packet)
 {
@@ -42,13 +59,102 @@ void on_snapshot(ENetPacket *packet)
 {
   uint16_t eid = invalid_entity;
   float x = 0.f; float y = 0.f; float ori = 0.f;
-  deserialize_snapshot(packet, eid, x, y, ori);
-  get_entity(eid, [&](Entity& e)
+  TimePoint timestamp;
+  
+  deserialize_snapshot(packet, eid, x, y, ori, timestamp);
+  
+  Snapshot snapshot(eid, x, y, ori, timestamp);
+  snapshotHistory[eid].push_back(snapshot);
+}
+
+void process_snapshot_history(const TimePoint& currentTime)
+{
+  // Целевое время для интерполяции (с задержкой)
+  TimePoint targetTime = currentTime - INTERPOLATION_TIME;
+  
+  // Обрабатываем каждую сущность
+  for (auto& [eid, snapshots] : snapshotHistory)
   {
-      e.x = x;
-      e.y = y;
-      e.ori = ori;
-  });
+    // Если история пуста, пропускаем
+    if (snapshots.empty())
+      continue;
+    
+    // Очищаем устаревшие снэпшоты (оставляем только нужные для интерполяции)
+    while (snapshots.size() > 2 && snapshots[1].timestamp < targetTime)
+    {
+      snapshots.erase(snapshots.begin());
+    }
+    
+    // Если осталось меньше 2 снэпшотов, или целевое время за пределами имеющихся снэпшотов,
+    // используем последний доступный снэпшот
+    if (snapshots.size() < 2 || targetTime <= snapshots[0].timestamp)
+    {
+      const auto& snapshot = snapshots[0];
+      get_entity(eid, [&](Entity& e)
+      {
+        e.x = snapshot.x;
+        e.y = snapshot.y;
+        e.ori = snapshot.ori;
+      });
+      continue;
+    }
+    
+    // Находим два снэпшота для интерполяции
+    size_t index = 0;
+    while (index < snapshots.size() - 1 && snapshots[index + 1].timestamp <= targetTime)
+    {
+      index++;
+    }
+    
+    if (index >= snapshots.size() - 1)
+    {
+      const auto& snapshot = snapshots.back();
+      get_entity(eid, [&](Entity& e)
+      {
+        e.x = snapshot.x;
+        e.y = snapshot.y;
+        e.ori = snapshot.ori;
+      });
+      continue;
+    }
+    
+    // Интерполяция между двумя снэпшотами
+    const auto& s1 = snapshots[index];
+    const auto& s2 = snapshots[index + 1];
+    
+    // Вычисляем коэффициент интерполяции (от 0 до 1)
+    float t = 0.f;
+    auto time_diff_s2_s1 = s2.timestamp - s1.timestamp;
+    auto time_diff_target_s1 = targetTime - s1.timestamp;
+    
+    if (time_diff_s2_s1.count() > 0) // Избегаем деления на ноль
+    {
+      t = static_cast<float>(time_diff_target_s1.count()) / static_cast<float>(time_diff_s2_s1.count());
+      t = std::clamp(t, 0.f, 1.f); // Ограничиваем t в диапазоне [0,1]
+    }
+    
+    // Линейная интерполяция позиции
+    float interpX = s1.x + (s2.x - s1.x) * t;
+    float interpY = s1.y + (s2.y - s1.y) * t;
+    
+    // Интерполяция ориентации (учитываем возможное кратчайшее вращение)
+    float dOri = s2.ori - s1.ori;
+    // Нормализуем разницу в углах для кратчайшего пути
+    if (dOri > 3.14159f)
+      dOri -= 2.f * 3.14159f;
+    else if (dOri < -3.14159f)
+      dOri += 2.f * 3.14159f;
+    
+    float interpOri = s1.ori + dOri * t;
+    
+    // Обновляем сущность интерполированными значениями
+    get_entity(eid, [&](Entity& e)
+    {
+      e.x = interpX;
+      e.y = interpY;
+      e.ori = interpOri;
+    });
+  }
 }
 
 static void on_time(ENetPacket *packet, ENetPeer* peer)
@@ -189,8 +295,10 @@ int main(int argc, const char **argv)
   while (!WindowShouldClose())
   {
     float dt = GetFrameTime(); // for future use and making it look smooth
+    TimePoint curTime = std::chrono::steady_clock::now();
 
     update_net(client, serverPeer);
+    process_snapshot_history(curTime);
     simulate_world(serverPeer);
     draw_world(camera);
   }
