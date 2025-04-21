@@ -19,10 +19,11 @@ struct Snapshot
   float y;
   float ori;
   TimePoint timestamp;
+  uint32_t frameNumber;
 
   Snapshot() = default;
-  Snapshot(uint16_t eid, float x, float y, float ori, TimePoint timestamp)
-    : eid(eid), x(x), y(y), ori(ori), timestamp(timestamp) {}
+  Snapshot(uint16_t eid, float x, float y, float ori, TimePoint timestamp, u_int32_t frameNumber)
+    : eid(eid), x(x), y(y), ori(ori), timestamp(timestamp), frameNumber(frameNumber) {}
 };
 
 static std::vector<Entity> entities;
@@ -60,11 +61,18 @@ void on_snapshot(ENetPacket *packet)
   uint16_t eid = invalid_entity;
   float x = 0.f; float y = 0.f; float ori = 0.f;
   TimePoint timestamp;
+  uint32_t frameNumber;
   
-  deserialize_snapshot(packet, eid, x, y, ori, timestamp);
+  deserialize_snapshot(packet, eid, x, y, ori, timestamp, frameNumber);
   
-  Snapshot snapshot(eid, x, y, ori, timestamp);
+  Snapshot snapshot(eid, x, y, ori, timestamp, frameNumber);
   snapshotHistory[eid].push_back(snapshot);
+  
+  auto& snapshots = snapshotHistory[eid];
+  if (snapshots.size() > 1 && snapshots.back().frameNumber < snapshots[snapshots.size() - 2].frameNumber) {
+    std::sort(snapshots.begin(), snapshots.end(), 
+              [](const Snapshot& a, const Snapshot& b) { return a.frameNumber < b.frameNumber; });
+  }
 }
 
 void process_snapshot_history(const TimePoint& currentTime)

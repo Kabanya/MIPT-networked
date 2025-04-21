@@ -46,12 +46,12 @@ void send_entity_input(ENetPeer *peer, uint16_t eid, float thr, float steer)
   enet_peer_send(peer, 1, packet);
 }
 
-void send_snapshot(ENetPeer *peer, uint16_t eid, float x, float y, float ori, TimePoint timestamp)
+void send_snapshot(ENetPeer *peer, uint16_t eid, float x, float y, float ori, TimePoint timestamp, uint32_t frameNumber)
 {
   auto duration = timestamp.time_since_epoch();
   uint64_t timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
   ENetPacket *packet = enet_packet_create(nullptr, sizeof(uint8_t) + sizeof(uint16_t) +
-                                                   3 * sizeof(float) + sizeof(uint64_t),
+                                                   3 * sizeof(float) + sizeof(uint64_t) + sizeof(uint32_t),
                                                    ENET_PACKET_FLAG_UNSEQUENCED);
   uint8_t *ptr = packet->data;
   *ptr = E_SERVER_TO_CLIENT_SNAPSHOT; ptr += sizeof(uint8_t);
@@ -61,6 +61,7 @@ void send_snapshot(ENetPeer *peer, uint16_t eid, float x, float y, float ori, Ti
   memcpy(ptr, &ori, sizeof(float)); ptr += sizeof(float);
   
   std::memcpy(ptr, &timestamp_ms, sizeof(uint64_t)); ptr += sizeof(uint64_t);
+  std::memcpy(ptr, &frameNumber, sizeof(uint32_t)); ptr += sizeof(uint32_t);
 
   enet_peer_send(peer, 1, packet);
 }
@@ -90,7 +91,7 @@ void deserialize_new_entity(ENetPacket *packet, Entity &ent)
 void deserialize_set_controlled_entity(ENetPacket *packet, uint16_t &eid)
 {
   uint8_t *ptr = packet->data; ptr += sizeof(uint8_t);
-  eid = *(uint16_t*)(ptr); ptr += sizeof(uint16_t);
+  eid = *(uint16_t*)(ptr); ptr += sizeof(u_int16_t);
 }
 
 void deserialize_entity_input(ENetPacket *packet, uint16_t &eid, float &thr, float &steer)
@@ -101,7 +102,7 @@ void deserialize_entity_input(ENetPacket *packet, uint16_t &eid, float &thr, flo
   steer = *(float*)(ptr); ptr += sizeof(float);
 }
 
-void deserialize_snapshot(ENetPacket *packet, uint16_t &eid, float &x, float &y, float &ori, TimePoint & timestamp)
+void deserialize_snapshot(ENetPacket *packet, uint16_t &eid, float &x, float &y, float &ori, TimePoint & timestamp, uint32_t & frameNumber)
 {
   uint8_t *ptr = packet->data; ptr += sizeof(uint8_t);
   eid = *(uint16_t*)(ptr); ptr += sizeof(uint16_t);
@@ -109,7 +110,9 @@ void deserialize_snapshot(ENetPacket *packet, uint16_t &eid, float &x, float &y,
   y = *(float*)(ptr); ptr += sizeof(float);
   ori = *(float*)(ptr); ptr += sizeof(float);
   uint64_t timestamp_ms = 0;
+
   std::memcpy(&timestamp_ms, ptr, sizeof(uint64_t)); ptr += sizeof(uint64_t);
+  std::memcpy(&frameNumber, ptr, sizeof(uint32_t)); ptr += sizeof(uint32_t);
 
   timestamp = TimePoint(std::chrono::milliseconds(timestamp_ms));
 }

@@ -9,6 +9,10 @@
 #include <chrono>
 using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
+constexpr float FIXED_DT = 1.0f / 10.0f; // 10 fps (100ms per frame)
+uint32_t frameCounter = 0;
+TimePoint serverStartTime;
+
 static std::vector<Entity> entities;
 static std::map<uint16_t, ENetPeer*> controlledMap;
 
@@ -96,7 +100,7 @@ static void simulate_world(ENetHost* server, float dt)
       ENetPeer *peer = &server->peers[i];
       // skip this here in this implementation
       //if (controlledMap[e.eid] != peer)
-      send_snapshot(peer, e.eid, e.x, e.y, e.ori, curTime);
+      send_snapshot(peer, e.eid, e.x, e.y, e.ori, curTime, frameCounter);
     }
   }
 }
@@ -128,18 +132,33 @@ int main(int argc, const char **argv)
     return 1;
   }
 
+  // Initialize server start time and frame counter
+  serverStartTime = std::chrono::steady_clock::now();
+  frameCounter = 0;
+
   uint32_t lastTime = enet_time_get();
+  float accumulatedTime = 0.0f;
+  
   while (true)
   {
     uint32_t curTime = enet_time_get();
-    float dt = (curTime - lastTime) * 0.001f;
+    uint32_t elapsed = curTime - lastTime;
     lastTime = curTime;
+    
+    accumulatedTime += elapsed;
+    
+    if (accumulatedTime >= FIXED_DT * 1000.0f)
+    {
+      update_net(server);
+      simulate_world(server, FIXED_DT);
+      update_time(server, curTime);
+      
+      frameCounter++;
+      accumulatedTime -= FIXED_DT * 1000.0f;
+      // std::cout << "Frame " << frameCounter << " processed, remaining time: " << accumulatedTime << " ms" << std::endl;
+    }
 
-    update_net(server);
-    simulate_world(server, dt);
-    update_time(server, curTime);
-
-    usleep(100000);
+    usleep(100000); // Original sleep time
   }
 
   enet_host_destroy(server);
@@ -147,5 +166,3 @@ int main(int argc, const char **argv)
   atexit(enet_deinitialize);
   return 0;
 }
-
-
