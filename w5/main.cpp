@@ -4,11 +4,13 @@
 #include "raylib.h"
 #include <enet/enet.h>
 #include <math.h>
-
 #include <vector>
 #include <chrono>
 #include <deque>
 #include <cmath>
+#include <unordered_map>
+#include <algorithm>
+
 #include "entity.h"
 #include "protocol.h"
 
@@ -21,18 +23,26 @@ struct InputCommand {
     TimePoint timestamp;
 };
 
+struct EntityState{
+  float x, y, ori, vx, vy, omega;
+  uint32_t frameNumber;
+};
+
 struct Snapshot
 {
   uint16_t eid;
   float x;
   float y;
   float ori;
+  float vx;
+  float vy;
+  float omega;
   TimePoint timestamp;
   uint32_t frameNumber;
 
   Snapshot() = default;
-  Snapshot(uint16_t eid, float x, float y, float ori, TimePoint timestamp, uint32_t frameNumber = 0)
-    : eid(eid), x(x), y(y), ori(ori), timestamp(timestamp), frameNumber(frameNumber) {}
+  Snapshot(uint16_t eid, float x, float y, float ori, float vx, float vy, float omega, TimePoint timestamp, uint32_t frameNumber = 0)
+    : eid(eid), x(x), y(y), ori(ori), vx(vx), vy(vy), omega(omega), timestamp(timestamp), frameNumber(frameNumber) {}
 };
 
 static std::vector<Entity> entities;
@@ -48,6 +58,10 @@ static uint32_t lastAcknowledgedFrame = 0;
 static bool pendingCorrection = false;
 static Snapshot serverState;
 constexpr float PREDICTION_ERROR_THRESHOLD = 0.5f;
+
+std::deque<EntityState> stateHistory;
+constexpr size_t STATE_HISTORY_LIMIT = 200;
+// static int serverDelay = 0; // на будущее
 
 void on_new_entity_packet(ENetPacket *packet)
 {
@@ -79,31 +93,27 @@ static void get_entity(uint16_t eid, Callable c)
 void on_snapshot(ENetPacket *packet)
 {
   uint16_t eid = invalid_entity;
-  float x = 0.f; float y = 0.f; float ori = 0.f;
+  float x = 0.f, y = 0.f, ori = 0.f, vx = 0.f, vy = 0.f, omega = 0.f;
   TimePoint timestamp;
   uint32_t frameNumber;
   
-  deserialize_snapshot(packet, eid, x, y, ori, timestamp, frameNumber);
+  deserialize_snapshot(packet, eid, x, y, ori, vx, vy, omega, timestamp, frameNumber);
   
-  Snapshot snapshot(eid, x, y, ori, timestamp, frameNumber);
+  Snapshot snapshot(eid, x, y, ori, vx, vy, omega, timestamp, frameNumber);
   
   if (eid == my_entity) {
     serverState = snapshot;
     lastAcknowledgedFrame = frameNumber;
     
-    // Remove acknowledged inputs
     while (!inputHistory.empty() && inputHistory.front().frameNumber <= frameNumber) {
       inputHistory.pop_front();
     }
     
-    // Check prediction error
     get_entity(my_entity, [&](Entity& e) {
       float dx = e.x - x;
       float dy = e.y - y;
       float posError = sqrt(dx*dx + dy*dy);
-      
       if (posError > PREDICTION_ERROR_THRESHOLD) {
-        // printf("Prediction error detected: %f units. Applying correction.\n", posError);
         pendingCorrection = true;
       }
     });
@@ -267,10 +277,10 @@ static void simulate_world(ENetPeer* serverPeer)
     bool right = IsKeyDown(KEY_RIGHT);
     bool up = IsKeyDown(KEY_UP);
     bool down = IsKeyDown(KEY_DOWN);
-    
+
     float thr = (up ? 1.f : 0.f) + (down ? -1.f : 0.f);
     float steer = (left ? -1.f : 0.f) + (right ? 1.f : 0.f);
-    
+
     InputCommand cmd = {
       clientFrameCounter,
       thr,
@@ -278,46 +288,64 @@ static void simulate_world(ENetPeer* serverPeer)
       std::chrono::steady_clock::now()
     };
     inputHistory.push_back(cmd);
-    
+
     // Не больше 100 команд в истории
     while (inputHistory.size() > 100) {
       inputHistory.pop_front();
     }
-    
+
     send_entity_input(serverPeer, my_entity, thr, steer);
-    
+
     get_entity(my_entity, [&](Entity& e)
     {
       if (pendingCorrection) {
-        e.x = serverState.x;
-        e.y = serverState.y;
-        e.ori = serverState.ori;
-        
+        // Найти состояние в истории по frameNumber
+        auto it = std::find_if(stateHistory.begin(), stateHistory.end(),
+          [&](const EntityState& s) { return s.frameNumber == serverState.frameNumber; });
+        if (it != stateHistory.end()) {
+          // Применить дельту к состоянию
+          float dx     = serverState.x   - it->x;
+          float dy     = serverState.y   - it->y;
+          float dvx    = serverState.vx  - it->vx;
+          float dvy    = serverState.vy  - it->vy;
+          float dori   = serverState.ori - it->ori;
+          float domega = serverState.omega - it->omega;
+          // Применить дельту ко всей истории после найденного кадра
+          for (auto jt = it; jt != stateHistory.end(); ++jt) {
+            jt->x     += dx;
+            jt->y     += dy;
+            jt->vx    += dvx;
+            jt->vy    += dvy;
+            jt->ori   += dori;
+            jt->omega += domega;
+          }
+        }
+        // Откатить состояние к серверному
+        e.x     = serverState.x;
+        e.y     = serverState.y;
+        e.vx    = serverState.vx;
+        e.vy    = serverState.vy;
+        e.ori   = serverState.ori;
+        e.omega = serverState.omega;
+
+        // Для всех команд в истории применить дельту
         for (const auto& input : inputHistory) {
           e.thr = input.thr;
           e.steer = input.steer;
-          // Симуляция вместо simulate_entity
-          e.vx += cosf(e.ori) * e.thr * FIXED_DT;
-          e.vy += sinf(e.ori) * e.thr * FIXED_DT;
-          e.omega += e.steer * FIXED_DT * 0.3f;
-          e.ori += e.omega * FIXED_DT;
-          e.x += e.vx * FIXED_DT;
-          e.y += e.vy * FIXED_DT;
+          simulate_entity(e, FIXED_DT);
         }
-        
         pendingCorrection = false;
       }
       else {
         e.thr = thr;
         e.steer = steer;
-        // Симуляция вместо simulate_entity
-        e.vx += cosf(e.ori) * e.thr * FIXED_DT;
-        e.vy += sinf(e.ori) * e.thr * FIXED_DT;
-        e.omega += e.steer * FIXED_DT * 0.3f;
-        e.ori += e.omega * FIXED_DT;
-        e.x += e.vx * FIXED_DT;
-        e.y += e.vy * FIXED_DT;
+        simulate_entity(e, FIXED_DT);
       }
+
+      // Сохраняем состояние в историю
+      stateHistory.push_back({e.x, e.y, e.ori, e.vx, e.vy, e.omega, clientFrameCounter});
+      if (stateHistory.size() > STATE_HISTORY_LIMIT)
+        stateHistory.pop_front();
     });
   }
 }
@@ -334,15 +362,33 @@ static void draw_world(const Camera2D& camera)
     EndMode2D();
     
     // Draw debug info for client-side
-    if (my_entity != invalid_entity) {
-      char buffer[100];
-      get_entity(my_entity, [&](const Entity& e) 
-      {
-        sprintf(buffer, "Pos: (%.1f, %.1f) Frame: %u TotalFrames: %u", 
-                e.x, e.y, clientFrameCounter, lastAcknowledgedFrame);
-      });
-      DrawText(buffer, 10, 10, 20, BLACK);
-    }
+        // ...existing code...
+        // Draw debug info for client-side
+        if (my_entity != invalid_entity) {
+          char buffer[256];
+          get_entity(my_entity, [&](const Entity& e) 
+          {
+            sprintf(buffer, 
+              "Pos: (%+2.2f, %+2.2f)\n"
+              "Vel: (%+2.2f, %+2.2f)\n"
+              "Ori: %+2.2f  Omega: %+2.2f\n"
+              "Thr: %+1.2f  Steer: %+1.2f\n"
+              "Frame: %3u | Ack: %3u\n"
+              "InputHist: %zu  StateHist: %zu\n"
+              "PendingCorrection: %s\n"
+              "Server Delay: 200 ms",
+              e.x, e.y,
+              e.vx, e.vy,
+              e.ori, e.omega,
+              e.thr, e.steer,
+              clientFrameCounter, lastAcknowledgedFrame,
+              inputHistory.size(), stateHistory.size(),
+              pendingCorrection ? "YES" : "NO"
+            );
+          });
+          DrawText(buffer, 5, 5, 10, BLACK);
+        }
+    // ...existing code...
     
   EndDrawing();
 }

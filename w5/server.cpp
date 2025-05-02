@@ -10,6 +10,7 @@
 
 uint32_t frameCounter = 0;
 TimePoint serverStartTime;
+constexpr int DELAY = 200000; // 200 ms
 
 static std::vector<Entity> entities;
 static std::map<uint16_t, ENetPeer*> controlledMap;
@@ -31,7 +32,18 @@ void on_join(ENetPacket *packet, ENetPeer *peer, ENetHost *host)
                    0x00000044 * (rand() % 5);
   float x = (rand() % 4) * 5.f;
   float y = (rand() % 4) * 5.f;
-  Entity ent = {color, x, y, 0.f, (rand() / RAND_MAX) * 3.141592654f, 0.f, 0.f, 0.f, 0.f, newEid};
+  // Entity ent = {color, x, y, 0.f, (rand() / RAND_MAX) * 3.141592654f, 0.f, 0.f, 0.f, 0.f, newEid};
+  Entity ent;
+  ent.color = color;
+  ent.x = x;
+  ent.y = y;
+  ent.vx = 0.f;
+  ent.vy = 0.f;
+  ent.ori = (rand() / (float)RAND_MAX) * 3.141592654f;
+  ent.omega = 0.f;
+  ent.thr = 0.f;
+  ent.steer = 0.f;
+  ent.eid = newEid;
   entities.push_back(ent);
 
   controlledMap[newEid] = peer;
@@ -95,7 +107,7 @@ static void simulate_world(ENetHost* server, float dt)
     {
       ENetPeer *peer = &server->peers[i];
       //if (controlledMap[e.eid] != peer)
-      send_snapshot(peer, e.eid, e.x, e.y, e.ori, curTime, frameCounter);
+      send_snapshot(peer, e.eid, e.x, e.y, e.ori, e.vx, e.vy, e.omega, curTime, frameCounter);
     }
   }
 }
@@ -143,16 +155,17 @@ int main(int argc, const char **argv)
     
     if (accumulatedTime >= FIXED_DT * 1000.0f)
     {
-      update_net(server);
       simulate_world(server, FIXED_DT);
+      update_net(server);
       update_time(server, curTime);
       
       frameCounter++;
       accumulatedTime -= FIXED_DT * 1000.0f;
       // std::cout << "Frame " << frameCounter << " processed, remaining time: " << accumulatedTime << " ms" << std::endl;
     }
-
-    usleep(100000);
+    
+    // usleep(100000);
+    usleep(DELAY); // 200ms
   }
 
   enet_host_destroy(server);
