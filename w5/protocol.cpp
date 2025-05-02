@@ -1,7 +1,6 @@
 #include "protocol.h"
 #include <cstring> // memcpy
 #include <chrono>
-using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
 void send_join(ENetPeer *peer)
 {

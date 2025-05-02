@@ -7,10 +7,19 @@
 
 #include <vector>
 #include <chrono>
+#include <deque>
+#include <cmath>
 #include "entity.h"
 #include "protocol.h"
 
 using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
+
+struct InputCommand {
+    uint32_t frameNumber;
+    float thr;
+    float steer;
+    TimePoint timestamp;
+};
 
 struct Snapshot
 {
@@ -22,7 +31,7 @@ struct Snapshot
   uint32_t frameNumber;
 
   Snapshot() = default;
-  Snapshot(uint16_t eid, float x, float y, float ori, TimePoint timestamp, u_int32_t frameNumber)
+  Snapshot(uint16_t eid, float x, float y, float ori, TimePoint timestamp, uint32_t frameNumber = 0)
     : eid(eid), x(x), y(y), ori(ori), timestamp(timestamp), frameNumber(frameNumber) {}
 };
 
@@ -32,6 +41,14 @@ static uint16_t my_entity = invalid_entity;
 static std::unordered_map<uint16_t, std::vector<Snapshot>> snapshotHistory;
 constexpr std::chrono::milliseconds INTERPOLATION_TIME{200};
 
+// Client prediction
+static std::deque<InputCommand> inputHistory;
+static uint32_t clientFrameCounter = 0;
+static uint32_t lastAcknowledgedFrame = 0;
+static bool pendingCorrection = false;
+static Snapshot serverState;
+constexpr float PREDICTION_ERROR_THRESHOLD = 0.5f;
+
 void on_new_entity_packet(ENetPacket *packet)
 {
   Entity newEntity;
@@ -39,6 +56,8 @@ void on_new_entity_packet(ENetPacket *packet)
   auto itf = indexMap.find(newEntity.eid);
   if (itf != indexMap.end())
     return; // don't need to do anything, we already have entity
+  
+  printf("Received new entity with ID: %u\n", newEntity.eid);
   indexMap[newEntity.eid] = entities.size();
   entities.push_back(newEntity);
 }
@@ -46,6 +65,7 @@ void on_new_entity_packet(ENetPacket *packet)
 void on_set_controlled_entity(ENetPacket *packet)
 {
   deserialize_set_controlled_entity(packet, my_entity);
+  printf("Set controlled entity to: %u\n", my_entity);
 }
 
 template<typename Callable>
@@ -66,6 +86,29 @@ void on_snapshot(ENetPacket *packet)
   deserialize_snapshot(packet, eid, x, y, ori, timestamp, frameNumber);
   
   Snapshot snapshot(eid, x, y, ori, timestamp, frameNumber);
+  
+  if (eid == my_entity) {
+    serverState = snapshot;
+    lastAcknowledgedFrame = frameNumber;
+    
+    // Remove acknowledged inputs
+    while (!inputHistory.empty() && inputHistory.front().frameNumber <= frameNumber) {
+      inputHistory.pop_front();
+    }
+    
+    // Check prediction error
+    get_entity(my_entity, [&](Entity& e) {
+      float dx = e.x - x;
+      float dy = e.y - y;
+      float posError = sqrt(dx*dx + dy*dy);
+      
+      if (posError > PREDICTION_ERROR_THRESHOLD) {
+        // printf("Prediction error detected: %f units. Applying correction.\n", posError);
+        pendingCorrection = true;
+      }
+    });
+  }
+  
   snapshotHistory[eid].push_back(snapshot);
   
   auto& snapshots = snapshotHistory[eid];
@@ -80,10 +123,12 @@ void process_snapshot_history(const TimePoint& currentTime)
   // Целевое время для интерполяции (с задержкой)
   TimePoint targetTime = currentTime - INTERPOLATION_TIME;
   
-  // Обрабатываем каждую сущность
   for (auto& [eid, snapshots] : snapshotHistory)
   {
-    // Если история пуста, пропускаем
+    // раскоментить, если надо посмотреть на клиента без интерполяции
+    // if (eid == my_entity) 
+    //   continue;
+    
     if (snapshots.empty())
       continue;
     
@@ -93,8 +138,7 @@ void process_snapshot_history(const TimePoint& currentTime)
       snapshots.erase(snapshots.begin());
     }
     
-    // Если осталось меньше 2 снэпшотов, или целевое время за пределами имеющихся снэпшотов,
-    // используем последний доступный снэпшот
+    // < 2 снэпшотов => используем последний 
     if (snapshots.size() < 2 || targetTime <= snapshots[0].timestamp)
     {
       const auto& snapshot = snapshots[0];
@@ -107,7 +151,6 @@ void process_snapshot_history(const TimePoint& currentTime)
       continue;
     }
     
-    // Находим два снэпшота для интерполяции
     size_t index = 0;
     while (index < snapshots.size() - 1 && snapshots[index + 1].timestamp <= targetTime)
     {
@@ -126,28 +169,26 @@ void process_snapshot_history(const TimePoint& currentTime)
       continue;
     }
     
-    // Интерполяция между двумя снэпшотами
     const auto& s1 = snapshots[index];
     const auto& s2 = snapshots[index + 1];
     
-    // Вычисляем коэффициент интерполяции (от 0 до 1)
     float t = 0.f;
     auto time_diff_s2_s1 = s2.timestamp - s1.timestamp;
     auto time_diff_target_s1 = targetTime - s1.timestamp;
     
-    if (time_diff_s2_s1.count() > 0) // Избегаем деления на ноль
+    if (time_diff_s2_s1.count() > 0)
     {
       t = static_cast<float>(time_diff_target_s1.count()) / static_cast<float>(time_diff_s2_s1.count());
-      t = std::clamp(t, 0.f, 1.f); // Ограничиваем t в диапазоне [0,1]
+      t = std::clamp(t, 0.f, 1.f);
     }
     
     // Линейная интерполяция позиции
     float interpX = s1.x + (s2.x - s1.x) * t;
     float interpY = s1.y + (s2.y - s1.y) * t;
     
-    // Интерполяция ориентации (учитываем возможное кратчайшее вращение)
+    // Кратчайший путь по углу
     float dOri = s2.ori - s1.ori;
-    // Нормализуем разницу в углах для кратчайшего пути
+
     if (dOri > 3.14159f)
       dOri -= 2.f * 3.14159f;
     else if (dOri < -3.14159f)
@@ -155,7 +196,6 @@ void process_snapshot_history(const TimePoint& currentTime)
     
     float interpOri = s1.ori + dOri * t;
     
-    // Обновляем сущность интерполированными значениями
     get_entity(eid, [&](Entity& e)
     {
       e.x = interpX;
@@ -192,7 +232,7 @@ static void update_net(ENetHost* client, ENetPeer* serverPeer)
     switch (event.type)
     {
     case ENET_EVENT_TYPE_CONNECT:
-      printf("Connection with %x:%u established\n", event.peer->address.host, event.peer->address.port);
+      printf("Connected to server, sending join request\n");
       send_join(serverPeer);
       break;
     case ENET_EVENT_TYPE_RECEIVE:
@@ -227,14 +267,57 @@ static void simulate_world(ENetPeer* serverPeer)
     bool right = IsKeyDown(KEY_RIGHT);
     bool up = IsKeyDown(KEY_UP);
     bool down = IsKeyDown(KEY_DOWN);
+    
+    float thr = (up ? 1.f : 0.f) + (down ? -1.f : 0.f);
+    float steer = (left ? -1.f : 0.f) + (right ? 1.f : 0.f);
+    
+    InputCommand cmd = {
+      clientFrameCounter,
+      thr,
+      steer,
+      std::chrono::steady_clock::now()
+    };
+    inputHistory.push_back(cmd);
+    
+    // Не больше 100 команд в истории
+    while (inputHistory.size() > 100) {
+      inputHistory.pop_front();
+    }
+    
+    send_entity_input(serverPeer, my_entity, thr, steer);
+    
     get_entity(my_entity, [&](Entity& e)
     {
-        // Update
-        float thr = (up ? 1.f : 0.f) + (down ? -1.f : 0.f);
-        float steer = (left ? -1.f : 0.f) + (right ? 1.f : 0.f);
-
-        // Send
-        send_entity_input(serverPeer, my_entity, thr, steer);
+      if (pendingCorrection) {
+        e.x = serverState.x;
+        e.y = serverState.y;
+        e.ori = serverState.ori;
+        
+        for (const auto& input : inputHistory) {
+          e.thr = input.thr;
+          e.steer = input.steer;
+          // Симуляция вместо simulate_entity
+          e.vx += cosf(e.ori) * e.thr * FIXED_DT;
+          e.vy += sinf(e.ori) * e.thr * FIXED_DT;
+          e.omega += e.steer * FIXED_DT * 0.3f;
+          e.ori += e.omega * FIXED_DT;
+          e.x += e.vx * FIXED_DT;
+          e.y += e.vy * FIXED_DT;
+        }
+        
+        pendingCorrection = false;
+      }
+      else {
+        e.thr = thr;
+        e.steer = steer;
+        // Симуляция вместо simulate_entity
+        e.vx += cosf(e.ori) * e.thr * FIXED_DT;
+        e.vy += sinf(e.ori) * e.thr * FIXED_DT;
+        e.omega += e.steer * FIXED_DT * 0.3f;
+        e.ori += e.omega * FIXED_DT;
+        e.x += e.vx * FIXED_DT;
+        e.y += e.vy * FIXED_DT;
+      }
     });
   }
 }
@@ -249,6 +332,18 @@ static void draw_world(const Camera2D& camera)
         draw_entity(e);
 
     EndMode2D();
+    
+    // Draw debug info for client-side
+    if (my_entity != invalid_entity) {
+      char buffer[100];
+      get_entity(my_entity, [&](const Entity& e) 
+      {
+        sprintf(buffer, "Pos: (%.1f, %.1f) Frame: %u TotalFrames: %u", 
+                e.x, e.y, clientFrameCounter, lastAcknowledgedFrame);
+      });
+      DrawText(buffer, 10, 10, 20, BLACK);
+    }
+    
   EndDrawing();
 }
 
@@ -269,7 +364,7 @@ int main(int argc, const char **argv)
 
   ENetAddress address;
   enet_address_set_host(&address, "localhost");
-  address.port = 10131;
+  address.port = 10131; // Make sure this matches the server port!
 
   ENetPeer *serverPeer = enet_host_connect(client, &address, 2, 0);
   if (!serverPeer)
@@ -298,16 +393,29 @@ int main(int argc, const char **argv)
   camera.rotation = 0.f;
   camera.zoom = 10.f;
 
-  SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
+  SetTargetFPS(60);
+
+  // Setup for fixed timestep
+  float accumulator = 0.0f;
+  clientFrameCounter = 0;
 
   while (!WindowShouldClose())
   {
-    float dt = GetFrameTime(); // for future use and making it look smooth
-    TimePoint curTime = std::chrono::steady_clock::now();
+    float frameTime = GetFrameTime();
+    accumulator += frameTime;
 
     update_net(client, serverPeer);
-    process_snapshot_history(curTime);
-    simulate_world(serverPeer);
+    
+    // Handle fixed timestep for prediction and simulation
+    while (accumulator >= FIXED_DT) {
+      simulate_world(serverPeer);
+      clientFrameCounter++;
+      accumulator -= FIXED_DT;
+    }
+    
+    // Process snapshots for other entities
+    process_snapshot_history(std::chrono::steady_clock::now());
+    
     draw_world(camera);
   }
 

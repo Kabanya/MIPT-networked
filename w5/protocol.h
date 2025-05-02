@@ -5,6 +5,8 @@
 #include "entity.h"
 using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
+constexpr float FIXED_DT = 1.0f / 10.0f;
+
 enum MessageType : uint8_t
 {
   E_CLIENT_TO_SERVER_JOIN = 0,
