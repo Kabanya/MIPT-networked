@@ -33,7 +33,7 @@ void send_set_controlled_entity(ENetPeer *peer, uint16_t eid)
   enet_peer_send(peer, 0, packet);
 }
 
-void send_entity_input(ENetPeer *peer, uint16_t eid, float thr, float ori)
+void send_entity_input(ENetPeer *peer, uint16_t eid, float thr, float steer)
 {
   ENetPacket *packet = enet_packet_create(nullptr, sizeof(uint8_t) + sizeof(uint16_t) +
                                                    sizeof(uint8_t),
@@ -42,8 +42,8 @@ void send_entity_input(ENetPeer *peer, uint16_t eid, float thr, float ori)
   *ptr = E_CLIENT_TO_SERVER_INPUT; ptr += sizeof(uint8_t);
   memcpy(ptr, &eid, sizeof(uint16_t)); ptr += sizeof(uint16_t);
   float4bitsQuantized thrPacked(thr, -1.f, 1.f);
-  float4bitsQuantized oriPacked(ori, -1.f, 1.f);
-  uint8_t thrSteerPacked = (thrPacked.packedVal << 4) | oriPacked.packedVal;
+  float4bitsQuantized steerPacked(steer, -1.f, 1.f);
+  uint8_t thrSteerPacked = (thrPacked.packedVal << 4) | steerPacked.packedVal;
   memcpy(ptr, &thrSteerPacked, sizeof(uint8_t)); ptr += sizeof(uint8_t);
   /*
   memcpy(ptr, &thrPacked, sizeof(uint8_t)); ptr += sizeof(uint8_t);
@@ -66,8 +66,8 @@ void send_snapshot(ENetPeer *peer, uint16_t eid, float x, float y, float ori)
   uint8_t *ptr = packet->data;
   *ptr = E_SERVER_TO_CLIENT_SNAPSHOT; ptr += sizeof(uint8_t);
   memcpy(ptr, &eid, sizeof(uint16_t)); ptr += sizeof(uint16_t);
-  PositionXQuantized xPacked(x, -16, 16);
-  PositionYQuantized yPacked(y, -8, 8);
+  PositionXQuantized xPacked(x, -worldSize, worldSize);
+  PositionYQuantized yPacked(y, -worldSize, worldSize);
   uint8_t oriPacked = pack_float<uint8_t>(ori, -PI, PI, 8);
   //printf("xPacked/unpacked %d %f\n", xPacked, x);
   memcpy(ptr, &xPacked.packedVal, sizeof(uint16_t)); ptr += sizeof(uint16_t);
@@ -75,6 +75,17 @@ void send_snapshot(ENetPeer *peer, uint16_t eid, float x, float y, float ori)
   memcpy(ptr, &oriPacked, sizeof(uint8_t)); ptr += sizeof(uint8_t);
 
   enet_peer_send(peer, 1, packet);
+}
+
+void send_time_msec(ENetPeer *peer, uint32_t timeMsec)
+{
+  ENetPacket *packet = enet_packet_create(nullptr, sizeof(uint8_t) + sizeof(uint32_t),
+                                                   ENET_PACKET_FLAG_RELIABLE);
+  uint8_t *ptr = packet->data;
+  *ptr = E_SERVER_TO_CLIENT_TIME_MSEC; ptr += sizeof(uint8_t);
+  memcpy(ptr, &timeMsec, sizeof(uint32_t)); ptr += sizeof(uint32_t);
+
+  enet_peer_send(peer, 0, packet);
 }
 
 MessageType get_packet_type(ENetPacket *packet)
@@ -120,8 +131,14 @@ void deserialize_snapshot(ENetPacket *packet, uint16_t &eid, float &x, float &y,
   PositionXQuantized xPackedVal(xPacked);
   PositionYQuantized yPackedVal(yPacked);
   uint8_t oriPacked = *(uint8_t*)(ptr); ptr += sizeof(uint8_t);
-  x = xPackedVal.unpack(-16, 16);
-  y = yPackedVal.unpack(-8, 8);
+  x = xPackedVal.unpack(-worldSize, worldSize);
+  y = yPackedVal.unpack(-worldSize, worldSize);
   ori = unpack_float<uint8_t>(oriPacked, -PI, PI, 8);
+}
+
+void deserialize_time_msec(ENetPacket *packet, uint32_t &timeMsec)
+{
+  uint8_t *ptr = packet->data; ptr += sizeof(uint8_t);
+  timeMsec = *(uint32_t*)(ptr); ptr += sizeof(uint32_t);
 }
 

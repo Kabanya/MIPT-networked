@@ -193,6 +193,7 @@ int main(int argc, const char **argv)
     update_net(client, serverPeer);
     simulate_world(serverPeer);
     draw_world(camera);
+    printf("%d\n", enet_time_get());
   }
 
   CloseWindow();

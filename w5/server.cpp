@@ -86,7 +86,7 @@ static void simulate_world(ENetHost* server, float dt)
   for (Entity &e : entities)
   {
     // simulate
-    simulate_entity(e, dt);
+    simulate_entity(e, dt); // 1.f/32.f
     // send
     for (size_t i = 0; i < server->peerCount; ++i)
     {
@@ -135,6 +135,8 @@ int main(int argc, const char **argv)
     update_net(server);
     simulate_world(server, dt);
     update_time(server, curTime);
+
+    printf("%d\n", curTime);
 
     usleep(100000);
   }
