@@ -15,8 +15,9 @@ float tile_val(float val, float border)
 void simulate_entity(Entity &e, float dt)
 {
   bool isBraking = sign(e.thr) < 0.f;
-  float accel = isBraking ? 6.f : 1.5f;
-  float va = clamp(e.thr, -0.3, 1.f) * accel;
+  // float accel = isBraking ? 6.f : 1.5f;
+  float accel = isBraking ? 12.f : 3.5f;
+  float va = clamp(e.thr, -0.3, 3.f) * accel;
   e.vx += cosf(e.ori) * va * dt;
   e.vy += sinf(e.ori) * va * dt;
   e.omega += e.steer * dt * 0.3f;

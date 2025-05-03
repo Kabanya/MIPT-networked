@@ -43,3 +43,5 @@ w1/server
 .cache/
 3rdParty/raylib
 CMakeLists.txt.user
+cmake-build-debug
+.idea

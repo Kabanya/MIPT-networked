@@ -9,18 +9,21 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(W5_SOURCES
-    main.cpp
-    protocol.cpp
-    )
+  main.cpp
+  protocol.cpp
+  entity.cpp
+  ../bitstream/bitstream.cpp
+  )
 
 set(W5_SERVER_SOURCES
-    server.cpp
-    protocol.cpp
-    entity.cpp
-    )
-
+  server.cpp
+  protocol.cpp
+  entity.cpp
+  ../bitstream/bitstream.cpp
+  )
 
 include_directories("../3rdParty/enet/include")
+include_directories("../bitstream")
 
 if(MSVC)
   # https://github.com/raysan5/raylib/issues/857

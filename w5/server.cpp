@@ -6,6 +6,11 @@
 #include <stdlib.h>
 #include <vector>
 #include <map>
+#include <chrono>
+
+uint32_t frameCounter = 0;
+TimePoint serverStartTime;
+constexpr int DELAY = 200000; // 200 ms
 
 static std::vector<Entity> entities;
 static std::map<uint16_t, ENetPeer*> controlledMap;
@@ -13,7 +18,8 @@ static std::map<uint16_t, ENetPeer*> controlledMap;
 void on_join(ENetPacket *packet, ENetPeer *peer, ENetHost *host)
 {
   // send all entities
-  for (const Entity &ent : entities)
+  for (const Entity &ent : entities)![photo_2025-05-03_18-26-33](https://github.com/user-attachments/assets/7ad5bf1e-3dc8-4b8a-8aee-04dbf76c6b1c)
+
     send_new_entity(peer, ent);
 
   // find max eid
@@ -27,11 +33,21 @@ void on_join(ENetPacket *packet, ENetPeer *peer, ENetHost *host)
                    0x00000044 * (rand() % 5);
   float x = (rand() % 4) * 5.f;
   float y = (rand() % 4) * 5.f;
-  Entity ent = {color, x, y, 0.f, (rand() / RAND_MAX) * 3.141592654f, 0.f, 0.f, 0.f, 0.f, newEid};
+  // Entity ent = {color, x, y, 0.f, (rand() / RAND_MAX) * 3.141592654f, 0.f, 0.f, 0.f, 0.f, newEid};
+  Entity ent;
+  ent.color = color;
+  ent.x = x;
+  ent.y = y;
+  ent.vx = 0.f;
+  ent.vy = 0.f;
+  ent.ori = (rand() / (float)RAND_MAX) * 3.141592654f;
+  ent.omega = 0.f;
+  ent.thr = 0.f;
+  ent.steer = 0.f;
+  ent.eid = newEid;
   entities.push_back(ent);
 
   controlledMap[newEid] = peer;
-
 
   // send info about new entity to everyone
   for (size_t i = 0; i < host->peerCount; ++i)
@@ -72,7 +88,7 @@ static void update_net(ENetHost* server)
         case E_CLIENT_TO_SERVER_INPUT:
           on_input(event.packet);
           break;
-      };
+        };
       enet_packet_destroy(event.packet);
       break;
     default:
@@ -83,6 +99,7 @@ static void update_net(ENetHost* server)
 
 static void simulate_world(ENetHost* server, float dt)
 {
+  TimePoint curTime = std::chrono::steady_clock::now();
   for (Entity &e : entities)
   {
     // simulate
@@ -91,9 +108,8 @@ static void simulate_world(ENetHost* server, float dt)
     for (size_t i = 0; i < server->peerCount; ++i)
     {
       ENetPeer *peer = &server->peers[i];
-      // skip this here in this implementation
       //if (controlledMap[e.eid] != peer)
-      send_snapshot(peer, e.eid, e.x, e.y, e.ori);
+      send_snapshot(peer, e.eid, e.x, e.y, e.ori, e.vx, e.vy, e.omega, curTime, frameCounter);
     }
   }
 }
@@ -125,20 +141,33 @@ int main(int argc, const char **argv)
     return 1;
   }
 
+  serverStartTime = std::chrono::steady_clock::now();
+  frameCounter = 0;
+
   uint32_t lastTime = enet_time_get();
+  float accumulatedTime = 0.0f;
+  
   while (true)
   {
     uint32_t curTime = enet_time_get();
-    float dt = (curTime - lastTime) * 0.001f;
+    uint32_t elapsed = curTime - lastTime;
     lastTime = curTime;
-
-    update_net(server);
-    simulate_world(server, dt);
-    update_time(server, curTime);
-
-    printf("%d\n", curTime);
-
-    usleep(100000);
+    
+    accumulatedTime += elapsed;
+    
+    if (accumulatedTime >= FIXED_DT * 1000.0f)
+    {
+      simulate_world(server, FIXED_DT);
+      update_net(server);
+      update_time(server, curTime);
+      
+      frameCounter++;
+      accumulatedTime -= FIXED_DT * 1000.0f;
+      // std::cout << "Frame " << frameCounter << " processed, remaining time: " << accumulatedTime << " ms" << std::endl;
+    }
+    
+    // usleep(100000);
+    usleep(DELAY); // 200ms
   }
 
   enet_host_destroy(server);
@@ -146,5 +175,3 @@ int main(int argc, const char **argv)
   atexit(enet_deinitialize);
   return 0;
 }
-
-
