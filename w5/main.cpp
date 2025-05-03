@@ -260,6 +260,9 @@ static void update_net(ENetHost* client, ENetPeer* serverPeer)
       case E_SERVER_TO_CLIENT_TIME_MSEC:
         on_time(event.packet, event.peer);
         break;
+      case E_CLIENT_TO_SERVER_JOIN:
+      case E_CLIENT_TO_SERVER_INPUT:
+        break;
       };
       enet_packet_destroy(event.packet);
       break;
@@ -460,7 +463,7 @@ int main(int argc, const char **argv)
     process_snapshot_history(std::chrono::steady_clock::now());
     
     draw_world(camera);
-    printf("%d\n", enet_time_get());
+    // printf("%d\n", enet_time_get());
   }
 
   CloseWindow();

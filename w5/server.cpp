@@ -18,7 +18,7 @@ static std::map<uint16_t, ENetPeer*> controlledMap;
 void on_join(ENetPacket *packet, ENetPeer *peer, ENetHost *host)
 {
   // send all entities
-  for (const Entity &ent : entities)![photo_2025-05-03_18-26-33](https://github.com/user-attachments/assets/7ad5bf1e-3dc8-4b8a-8aee-04dbf76c6b1c)
+  for (const Entity &ent : entities)
 
     send_new_entity(peer, ent);
 
