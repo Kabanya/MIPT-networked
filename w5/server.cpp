@@ -18,7 +18,8 @@ static std::map<uint16_t, ENetPeer*> controlledMap;
 void on_join(ENetPacket *packet, ENetPeer *peer, ENetHost *host)
 {
   // send all entities
-  for (const Entity &ent : entities)
+  for (const Entity &ent : entities)![photo_2025-05-03_18-26-33](https://github.com/user-attachments/assets/7ad5bf1e-3dc8-4b8a-8aee-04dbf76c6b1c)
+
     send_new_entity(peer, ent);
 
   // find max eid
@@ -101,7 +102,9 @@ static void simulate_world(ENetHost* server, float dt)
   TimePoint curTime = std::chrono::steady_clock::now();
   for (Entity &e : entities)
   {
-    simulate_entity(e, dt);
+    // simulate
+    simulate_entity(e, dt); // 1.f/32.f
+    // send
     for (size_t i = 0; i < server->peerCount; ++i)
     {
       ENetPeer *peer = &server->peers[i];

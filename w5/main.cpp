@@ -460,6 +460,7 @@ int main(int argc, const char **argv)
     process_snapshot_history(std::chrono::steady_clock::now());
     
     draw_world(camera);
+    printf("%d\n", enet_time_get());
   }
 
   CloseWindow();
