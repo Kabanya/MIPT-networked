@@ -17,10 +17,10 @@
 using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
 struct InputCommand {
-    uint32_t frameNumber;
-    float thr;
-    float steer;
-    TimePoint timestamp;
+  uint32_t frameNumber;
+  float thr;
+  float steer;
+  TimePoint timestamp;
 };
 
 struct EntityState{
@@ -361,34 +361,31 @@ static void draw_world(const Camera2D& camera)
 
     EndMode2D();
     
-    // Draw debug info for client-side
-        // ...existing code...
-        // Draw debug info for client-side
-        if (my_entity != invalid_entity) {
-          char buffer[256];
-          get_entity(my_entity, [&](const Entity& e) 
-          {
-            sprintf(buffer, 
-              "Pos: (%+2.2f, %+2.2f)\n"
-              "Vel: (%+2.2f, %+2.2f)\n"
-              "Ori: %+2.2f  Omega: %+2.2f\n"
-              "Thr: %+1.2f  Steer: %+1.2f\n"
-              "Frame: %3u | Ack: %3u\n"
-              "InputHist: %zu  StateHist: %zu\n"
-              "PendingCorrection: %s\n"
-              "Server Delay: 200 ms",
-              e.x, e.y,
-              e.vx, e.vy,
-              e.ori, e.omega,
-              e.thr, e.steer,
-              clientFrameCounter, lastAcknowledgedFrame,
-              inputHistory.size(), stateHistory.size(),
-              pendingCorrection ? "YES" : "NO"
-            );
-          });
-          DrawText(buffer, 5, 5, 10, BLACK);
-        }
-    // ...existing code...
+    if (my_entity != invalid_entity)
+    {
+        char buffer[256];
+        get_entity(my_entity, [&](const Entity& e) 
+        {
+          sprintf(buffer, 
+            "Pos: (%+2.2f, %+2.2f)\n"
+            "Vel: (%+2.2f, %+2.2f)\n"
+            "Ori: %+2.2f  Omega: %+2.2f\n"
+            "Thr: %+1.2f  Steer: %+1.2f\n"
+            "Frame: %3u | Last server frame: %3u\n"
+            "InputHist: %zu | StateHist: %zu\n"
+            "PendingCorrection: %s\n"
+            "Server Delay: 200 ms",
+            e.x, e.y,
+            e.vx, e.vy,
+            e.ori, e.omega,
+            e.thr, e.steer,
+            clientFrameCounter, lastAcknowledgedFrame,
+            inputHistory.size(), stateHistory.size(),
+            pendingCorrection ? "YES" : "NO"
+          );
+        });
+        DrawText(buffer, 5, 5, 10, BLACK);
+      }
     
   EndDrawing();
 }

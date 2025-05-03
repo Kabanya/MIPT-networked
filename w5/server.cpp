@@ -48,7 +48,6 @@ void on_join(ENetPacket *packet, ENetPeer *peer, ENetHost *host)
 
   controlledMap[newEid] = peer;
 
-
   // send info about new entity to everyone
   for (size_t i = 0; i < host->peerCount; ++i)
     send_new_entity(&host->peers[i], ent);
