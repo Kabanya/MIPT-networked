@@ -1,5 +1,5 @@
+#include <cstring>
 #include <enet/enet.h>
-#include <iostream>
 #include <string>
 #include <vector>
 

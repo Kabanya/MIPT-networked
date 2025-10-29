@@ -1,4 +1,5 @@
 #include "raylib.h"
+#include <cstring>
 #include <enet/enet.h>
 #include <iostream>
 #include <string>
@@ -92,49 +93,49 @@ int main(int argc, const char **argv)
   uint32_t lastPositionSendTime = timeStart;
   bool connectedToLobby = false;
   bool connectedToGameServer = false;
-  
+
   ENetPeer *gamePeer = nullptr;
   std::string gameServerStatus = "Connecting to lobby...";
   std::vector<Player> players;
-  
+
   float posx = GetRandomValue(100, 500);
   float posy = GetRandomValue(100, 500);
   float velx = 0.f;
   float vely = 0.f;
-  
+
   int myPlayerId = -1;
-  
+
   while (!WindowShouldClose())
   {
     const float dt = GetFrameTime();
     ENetEvent event;
-    
+
     while (enet_host_service(client, &event, 10) > 0)
     {
       switch (event.type)
       {
       case ENET_EVENT_TYPE_CONNECT:
         printf("Connection with %x:%u established\n", event.peer->address.host, event.peer->address.port);
-        if (event.peer == lobbyPeer) 
+        if (event.peer == lobbyPeer)
         {
           connectedToLobby = true;
           gameServerStatus = "Connected to lobby";
-        } 
-        else if (event.peer == gamePeer) 
+        }
+        else if (event.peer == gamePeer)
         {
           connectedToGameServer = true;
           gameServerStatus = "Connected to game server";
         }
         break;
-        
+
       case ENET_EVENT_TYPE_RECEIVE:
         printf("Packet received '%s'\n", event.packet->data);
-        
-        if (event.peer == lobbyPeer && !connectedToGameServer) 
+
+        if (event.peer == lobbyPeer && !connectedToGameServer)
         {
           const char* data = (const char*)event.packet->data;
-          
-          if (strncmp(data, "GAMESERVER", 10) == 0) 
+
+          if (strncmp(data, "GAMESERVER", 10) == 0)
           {
             char serverIP[256];
             int serverPort;
@@ -143,61 +144,61 @@ int main(int argc, const char **argv)
               ENetAddress gameAddress;
               enet_address_set_host(&gameAddress, serverIP);
               gameAddress.port = serverPort;
-              
+
               gamePeer = enet_host_connect(client, &gameAddress, 2, 0);
-              if (!gamePeer) 
+              if (!gamePeer)
               {
                 gameServerStatus = "Cannot connect to game server";
-              } 
-              else 
+              }
+              else
               {
                 gameServerStatus = "Connecting to game server...";
               }
             }
           }
         }
-        else if (event.peer == gamePeer) 
+        else if (event.peer == gamePeer)
         {
           const char* data = (const char*)event.packet->data;
-          
-          if (strncmp(data, "WELCOME", 7) == 0) 
+
+          if (strncmp(data, "WELCOME", 7) == 0)
           {
             int id;
             char name[256];
-            if (sscanf(data, "WELCOME %d %s", &id, name) >= 1) 
+            if (sscanf(data, "WELCOME %d %s", &id, name) >= 1)
             {
               myPlayerId = id;
               gameServerStatus = "Playing as player " + std::to_string(myPlayerId);
             }
           }
-          else if (strncmp(data, "PLAYERS", 7) == 0) 
+          else if (strncmp(data, "PLAYERS", 7) == 0)
           {
             players.clear();
-            
+
             std::string playerData((const char*)event.packet->data);
             std::istringstream ss(playerData.substr(8));
-            
+
             Player player;
             std::string token;
-            
-            while (std::getline(ss, token, ';')) 
+
+            while (std::getline(ss, token, ';'))
             {
               std::istringstream playerStream(token);
-              if (playerStream >> player.id >> player.x >> player.y >> player.ping) 
+              if (playerStream >> player.id >> player.x >> player.y >> player.ping)
               {
                 players.push_back(player);
               }
             }
           }
-          else if (strncmp(data, "POS", 3) == 0) 
+          else if (strncmp(data, "POS", 3) == 0)
           {
             int playerId;
             float x, y;
-            if (sscanf(data, "POS %d %f %f", &playerId, &x, &y) == 3) 
+            if (sscanf(data, "POS %d %f %f", &playerId, &x, &y) == 3)
             {
-              for (auto& player : players) 
+              for (auto& player : players)
               {
-                if (player.id == playerId) 
+                if (player.id == playerId)
                 {
                   player.x = x;
                   player.y = y;
@@ -206,28 +207,28 @@ int main(int argc, const char **argv)
               }
             }
           }
-          else if (strncmp(data, "NEWPLAYER", 9) == 0) 
+          else if (strncmp(data, "NEWPLAYER", 9) == 0)
           {
             int playerId;
             char playerName[256];
-            if (sscanf(data, "NEWPLAYER %d %s", &playerId, playerName) >= 1) 
+            if (sscanf(data, "NEWPLAYER %d %s", &playerId, playerName) >= 1)
             {
               bool playerExists = false;
-              for (const auto& player : players) 
+              for (const auto& player : players)
               {
-                if (player.id == playerId) 
+                if (player.id == playerId)
                 {
                   playerExists = true;
                   break;
                 }
               }
-              
-              //add new players in list 
-              if (!playerExists) 
+
+              //add new players in list
+              if (!playerExists)
               {
                 Player newPlayer;
                 newPlayer.id = playerId;
-                newPlayer.x = 0.0f; 
+                newPlayer.x = 0.0f;
                 newPlayer.y = 0.0f;
                 newPlayer.ping = 0;
                 players.push_back(newPlayer);
@@ -235,14 +236,14 @@ int main(int argc, const char **argv)
             }
           }
           //player disconnection
-          else if (strncmp(data, "PLAYERLEFT", 10) == 0) 
+          else if (strncmp(data, "PLAYERLEFT", 10) == 0)
           {
             int playerId;
-            if (sscanf(data, "PLAYERLEFT %d", &playerId) == 1) 
+            if (sscanf(data, "PLAYERLEFT %d", &playerId) == 1)
             {
-              for (auto it = players.begin(); it != players.end(); ++it) 
+              for (auto it = players.begin(); it != players.end(); ++it)
               {
-                if (it->id == playerId) 
+                if (it->id == playerId)
                 {
                   players.erase(it);
                   break;
@@ -250,34 +251,34 @@ int main(int argc, const char **argv)
               }
             }
           }
-          else if (strncmp(data, "PINGS", 5) == 0) 
+          else if (strncmp(data, "PINGS", 5) == 0)
           {
             printf("Processing ping data: %s\n", data);
             std::string pingData((const char*)event.packet->data);
             std::istringstream ss(pingData.substr(6));
-            
+
             std::string token;
-            while (std::getline(ss, token, ';')) 
+            while (std::getline(ss, token, ';'))
             {
               if (token.empty()) continue;
-              
+
               int playerId, pingValue;
               std::istringstream pingStream(token);
-              if (pingStream >> playerId >> pingValue) 
+              if (pingStream >> playerId >> pingValue)
               {
                 printf("Received ping update: Player %d, Ping %d\n", playerId, pingValue);
                 bool updated = false;
-                for (auto& player : players) 
+                for (auto& player : players)
                 {
-                  if (player.id == playerId) 
+                  if (player.id == playerId)
                   {
                     player.ping = pingValue;
                     updated = true;
                     break;
                   }
                 }
-                
-                if (!updated && playerId != myPlayerId) 
+
+                if (!updated && playerId != myPlayerId)
                 {
                   printf("Adding new player from ping data: %d\n", playerId);
                   Player newPlayer;
@@ -291,50 +292,50 @@ int main(int argc, const char **argv)
             }
           }
         }
-        
+
         enet_packet_destroy(event.packet);
         break;
-        
+
       case ENET_EVENT_TYPE_DISCONNECT:
         printf("Disconnected from %x:%u\n", event.peer->address.host, event.peer->address.port);
-        if (event.peer == lobbyPeer) 
+        if (event.peer == lobbyPeer)
         {
           connectedToLobby = false;
           gameServerStatus = "Disconnected from lobby";
           lobbyPeer = nullptr;
-        } 
-        else if (event.peer == gamePeer) 
+        }
+        else if (event.peer == gamePeer)
         {
           connectedToGameServer = false;
           gameServerStatus = "Disconnected from game server";
           gamePeer = nullptr;
         }
         break;
-        
+
       default:
         break;
       };
     }
-    
-    if (connectedToGameServer) 
+
+    if (connectedToGameServer)
     {
       uint32_t curTime = enet_time_get();
-      if (curTime - lastPositionSendTime > 50) 
+      if (curTime - lastPositionSendTime > 50)
       {
         lastPositionSendTime = curTime;
         send_position(gamePeer, posx, posy);
       }
     }
-    
-    if (connectedToLobby) 
+
+    if (connectedToLobby)
     {
       uint32_t curTime = enet_time_get();
-      if (curTime - lastFragmentedSendTime > 1000) 
+      if (curTime - lastFragmentedSendTime > 1000)
       {
         lastFragmentedSendTime = curTime;
         // send_fragmented_packet(lobbyPeer);
       }
-      if (curTime - lastMicroSendTime > 100) 
+      if (curTime - lastMicroSendTime > 100)
       {
         lastMicroSendTime = curTime;
         // send_micro_packet(lobbyPeer);
@@ -343,13 +344,13 @@ int main(int argc, const char **argv)
 
     if (IsKeyPressed(KEY_ESCAPE))
       break;
-      
-    if (IsKeyPressed(KEY_ENTER) && connectedToLobby) 
+
+    if (IsKeyPressed(KEY_ENTER) && connectedToLobby)
     {
       ENetPacket *packet = enet_packet_create("Start!", strlen("Start!") + 1, ENET_PACKET_FLAG_RELIABLE);
       enet_peer_send(lobbyPeer, 0, packet);
     }
-    
+
     bool left = IsKeyDown(KEY_LEFT);
     bool right = IsKeyDown(KEY_RIGHT);
     bool up = IsKeyDown(KEY_UP);
@@ -364,54 +365,54 @@ int main(int argc, const char **argv)
 
     BeginDrawing();
       ClearBackground(BLACK);
-      
+
       DrawText(TextFormat("Current status: %s", gameServerStatus.c_str()), 20, 20, 20, WHITE);
       DrawText(TextFormat("My position: (%d, %d)", (int)posx, (int)posy), 20, 40, 20, WHITE);
-      
+
       DrawCircleV(Vector2{posx, posy}, 10.f, WHITE);
-      
+
       DrawText("List of players:", 20, 60, 20, WHITE);
-      
+
       int yOffset = 80;
-      for (const auto& player : players) 
+      for (const auto& player : players)
       {
-        DrawText(TextFormat("Player %d: (%d, %d) - Ping: %d ms", 
-                          player.id, (int)player.x, (int)player.y, player.ping), 
+        DrawText(TextFormat("Player %d: (%d, %d) - Ping: %d ms",
+                          player.id, (int)player.x, (int)player.y, player.ping),
                           20, yOffset, 18, WHITE);
         yOffset += 20;
-        
-        if (player.id != myPlayerId) 
+
+        if (player.id != myPlayerId)
         {
           DrawCircleV(Vector2{player.x, player.y}, 10.f, RED);
           DrawText(TextFormat("%d", player.id), player.x - 5, player.y - 5, 16, WHITE);
         }
       }
-      
+
     EndDrawing();
   }
-  
-  if (lobbyPeer) 
+
+  if (lobbyPeer)
   {
     enet_peer_disconnect(lobbyPeer, 0);
   }
-  if (gamePeer) 
+  if (gamePeer)
   {
     enet_peer_disconnect(gamePeer, 0);
   }
-  
+
   ENetEvent event;
-  while (enet_host_service(client, &event, 1000) > 0) 
+  while (enet_host_service(client, &event, 1000) > 0)
   {
-    if (event.type == ENET_EVENT_TYPE_RECEIVE) 
+    if (event.type == ENET_EVENT_TYPE_RECEIVE)
     {
       enet_packet_destroy(event.packet);
     }
   }
-  
+
   enet_host_destroy(client);
   enet_deinitialize();
-  
+
   CloseWindow();
-  
+
   return 0;
 }

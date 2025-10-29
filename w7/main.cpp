@@ -1,10 +1,11 @@
 // initial skeleton is a clone from https://github.com/jpcy/bgfx-minimal-example
 //
-#include <functional>
+#include <cstdio>
 #include "raylib.h"
 #include <enet/enet.h>
 #include <math.h>
 
+#include <unordered_map>
 #include <vector>
 #include "entity.h"
 #include "protocol.h"
@@ -116,6 +117,9 @@ static void update_net(ENetHost* client, ENetPeer* serverPeer)
         break;
       case E_SERVER_TO_CLIENT_TIME_MSEC:
         on_time(event.packet, event.peer);
+        break;
+      case E_CLIENT_TO_SERVER_JOIN:
+      case E_CLIENT_TO_SERVER_INPUT:
         break;
       };
       enet_packet_destroy(event.packet);

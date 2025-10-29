@@ -5,7 +5,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <cstring>
-#include <stdio.h>
 
 #include "socket_tools.h"
 

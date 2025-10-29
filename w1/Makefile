@@ -6,7 +6,7 @@ socket_tools.o: socket_tools.cpp
 server_tools.o: server_tools.cpp
 	$(CXX) -c server_tools.cpp -o server_tools.o
 
-client_tools.o: client_tools.cpp 
+client_tools.o: client_tools.cpp
 	$(CXX) -c client_tools.cpp -o client_tools.o
 
 server.o: server.cpp

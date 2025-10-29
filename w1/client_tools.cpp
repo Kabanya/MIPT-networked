@@ -5,14 +5,13 @@
 #include <cstring>
 #include <iostream>
 
-#include "client_tools.h"   
-#include "socket_tools.h"          
+#include "client_tools.h"
 
 void receive_messages(int sfd)
 {
   constexpr size_t buf_size = 1000;
   char buffer[buf_size];
-  
+
   while (true)
   {
     fd_set readSet;
@@ -27,10 +26,10 @@ void receive_messages(int sfd)
       memset(buffer, 0, buf_size);
       sockaddr_in sender_addr;
       socklen_t addr_len = sizeof(sender_addr);
-      
-      ssize_t bytes_received = recvfrom(sfd, buffer, buf_size - 1, 0, 
+
+      ssize_t bytes_received = recvfrom(sfd, buffer, buf_size - 1, 0,
                                         (struct sockaddr*)&sender_addr, &addr_len);
-      
+
       if (bytes_received > 0)
       {
         std::cout << "\r" << buffer << "\n>";
@@ -42,7 +41,7 @@ void receive_messages(int sfd)
 
 void display_help()
 {
-  std::cout << "\n-----------------Client-INFO-------------------\n" 
+  std::cout << "\n-----------------Client-INFO-------------------\n"
             << "/c [msg] - Send a message to all connected clients\n"
             << "/mathduel - Challenge someone to a math duel\n"
             << "Any other message will be sent to the server only\n"

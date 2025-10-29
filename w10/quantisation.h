@@ -1,6 +1,6 @@
 #pragma once
 #include "mathUtils.h"
-#include <limits>
+#include <cstdint>
 
 template<typename T>
 T pack_float(float v, float lo, float hi, int num_bits)

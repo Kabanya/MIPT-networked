@@ -18,9 +18,9 @@ int main(int argc, const char **argv)
   printf("listening on port %s!\n", port);
 
   std::vector<Client> clients;
-  
+
   std::thread input_thread(server_input_processing, sfd, std::ref(clients));
-  input_thread.detach(); 
+  input_thread.detach();
 
   while (true)
   {
@@ -47,7 +47,7 @@ int main(int argc, const char **argv)
         currentClient.addr = sin;
         currentClient.id = client_to_string(currentClient);
         bool clientExists = false;
-        
+
         for (const Client& client : clients)
         {
           if (client.addr.sin_addr.s_addr == sin.sin_addr.s_addr && client.addr.sin_port == sin.sin_port)
@@ -57,23 +57,23 @@ int main(int argc, const char **argv)
             break;
           }
         }
-        
+
         if(!clientExists)
         {
           clients.push_back(currentClient);
-          
+
           std::string welcomeMsg = "\n/c - message to all users\n/mathduel - challenge someone to a math duel\n/help - for help";
           sendto(sfd, welcomeMsg.c_str(), welcomeMsg.size(), 0, (struct sockaddr*)&sin, slen);
         }
-        
+
         mathduel(message, currentClient, sfd, clients);
-      
+
         if (message.length() > 3 && message.substr(0, 3) == "/c ") //mb better to move into server_tools
         {
           //extrarct & send message
           std::string chatMessage = message.substr(3);
           std::string senderInfo = client_to_string(currentClient);
-          
+
           printf("msg from (%s): %s\n", senderInfo.c_str(), chatMessage.c_str());
 
           std::string broadcastMsg = "CHAT (" + senderInfo + "): " + chatMessage;

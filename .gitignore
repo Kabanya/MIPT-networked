@@ -45,3 +45,5 @@ w1/server
 CMakeLists.txt.user
 cmake-build-debug
 .idea
+
+compile_commands.json

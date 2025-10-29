@@ -9,16 +9,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(W10_SOURCES
-    main.cpp
-    protocol.cpp
-    )
+  main.cpp
+  protocol.cpp
+  )
 
 set(W10_SERVER_SOURCES
-    server.cpp
-    protocol.cpp
-    entity.cpp
-    )
-
+  server.cpp
+  protocol.cpp
+  entity.cpp
+  )
 
 include_directories("../3rdParty/enet/include")
 

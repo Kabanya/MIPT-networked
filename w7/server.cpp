@@ -1,8 +1,7 @@
+#include <cstdio>
 #include <enet/enet.h>
-#include <iostream>
 #include "entity.h"
 #include "protocol.h"
-#include "mathUtils.h"
 #include <stdlib.h>
 #include <vector>
 #include <map>
@@ -27,7 +26,8 @@ void on_join(ENetPacket *packet, ENetPeer *peer, ENetHost *host)
                    0x00004400 * (rand() % 4 + 1);
   float x = (rand() % 4) * 5.f;
   float y = (rand() % 4) * 5.f;
-  Entity ent = {color, false, x, y, 0.f, (rand() / RAND_MAX) * 3.141592654f, 0.f, 0.f, 0.f, 0.f, newEid};
+  Entity ent = {color, false, x, y, 0.f,
+    (rand() / RAND_MAX) * 3.141592654f, 0.f, 0.f, 0.f, 0.f, newEid}; //NOLINT
   entities.push_back(ent);
 
   controlledMap[newEid] = peer;
@@ -53,7 +53,8 @@ void create_server_entity(ENetHost *host)
                    0x00000044 * (rand() % 5);
   float x = rand() % int(worldSize * 2) - worldSize;
   float y = rand() % int(worldSize * 2) - worldSize;
-  Entity ent = {color, true, x, y, 0.f, (rand() / RAND_MAX) * 3.141592654f, 0.f, 0.f, 0.f, 0.f, newEid};
+  Entity ent = {color, true, x, y, 0.f,
+    (rand() / RAND_MAX) * 3.141592654f, 0.f, 0.f, 0.f, 0.f, newEid}; //NOLINT
   entities.push_back(ent);
 
   // send info about new entity to everyone
@@ -94,7 +95,12 @@ static void update_net(ENetHost* server)
         case E_CLIENT_TO_SERVER_INPUT:
           on_input(event.packet);
           break;
-      };
+        case E_SERVER_TO_CLIENT_NEW_ENTITY:
+        case E_SERVER_TO_CLIENT_SET_CONTROLLED_ENTITY:
+        case E_SERVER_TO_CLIENT_SNAPSHOT:
+        case E_SERVER_TO_CLIENT_TIME_MSEC:
+          break;
+        };
       enet_packet_destroy(event.packet);
       break;
     default:

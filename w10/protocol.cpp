@@ -1,7 +1,6 @@
 #include "protocol.h"
 #include "quantisation.h"
 #include <cstring> // memcpy
-#include <iostream>
 #include <stdlib.h>
 
 static uint32_t xorCipherKey = 0;

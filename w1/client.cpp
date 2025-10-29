@@ -45,19 +45,19 @@ int main(int argc, const char **argv)
 
   std::thread receive_thread(receive_messages, sfd);
   receive_thread.detach();
-  
+
   while (true)
   {
     std::string input;
     printf(">");
     std::getline(std::cin, input);
-    
+
     if (input == "/help" || input == "/h" || input == "/?" || input == "--help") 
     {
       display_help();
       continue;
     }
-    
+
     if (!input.empty())
     {
       ssize_t res = sendto(sfd, input.c_str(), input.size(), 0, resAddrInfo.ai_addr, resAddrInfo.ai_addrlen);
