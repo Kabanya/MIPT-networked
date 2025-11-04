@@ -24,7 +24,6 @@ set(W4_BITSTREAM_SOURCES
     bitstream.h
     bitstream.cpp
     )
-    
 
 include_directories("../3rdParty/enet/include")
 
@@ -44,7 +43,7 @@ target_link_libraries(w4_server PUBLIC enet)
 # add_executable(w4_bitstream ${W4_BITSTREAM_SOURCES})
 # target_link_libraries(w4_bitstream PUBLIC project_options project_warnings)
 
-add_library(w4_bitstream ${W4_BITSTREAM_SOURCES}) 
+add_library(w4_bitstream ${W4_BITSTREAM_SOURCES})
 target_link_libraries(w4_bitstream PUBLIC project_options project_warnings)
 
 

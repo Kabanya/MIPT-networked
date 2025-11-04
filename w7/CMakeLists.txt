@@ -19,7 +19,6 @@ set(W7_SERVER_SOURCES
   entity.cpp
   )
 
-
 include_directories("../3rdParty/enet/include")
 
 if(MSVC)

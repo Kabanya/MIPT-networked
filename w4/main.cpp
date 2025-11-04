@@ -1,7 +1,7 @@
-#include <functional>
 #include <algorithm> // min/max
 #include <cstdio>    // printf
 #include <enet/enet.h>
+#include <unordered_map>
 #include <vector>
 #include <string>
 

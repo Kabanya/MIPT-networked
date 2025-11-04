@@ -1,7 +1,5 @@
 #include "protocol.h"
 #include "bitstream.h"
-#include <cstring>
-#include <unordered_map>
 
 void send_join(ENetPeer *peer)
 {
@@ -16,7 +14,7 @@ void send_new_entity(ENetPeer *peer, const Entity &ent)
 {
   BitStream bs;
   bs.Write<uint8_t>(E_SERVER_TO_CLIENT_NEW_ENTITY);
-  
+
   bs.Write<uint32_t>(ent.color);
   bs.Write<float>(ent.x);
   bs.Write<float>(ent.y);
@@ -46,7 +44,7 @@ void send_entity_state(ENetPeer *peer, uint16_t eid, float x, float y)
   BitStream bs;
   bs.Write<uint8_t>(E_CLIENT_TO_SERVER_STATE);
   bs.Write<uint16_t>(eid);
-  
+
   bs.Write<float>(x);
   bs.Write<float>(y);
 
@@ -59,10 +57,10 @@ void send_snapshot(ENetPeer *peer, uint16_t eid, float x, float y, float size)
   BitStream bs;
   bs.Write<uint8_t>(E_SERVER_TO_CLIENT_SNAPSHOT);
   bs.Write<uint16_t>(eid);
-  
+
   bs.Write<float>(x);
   bs.Write<float>(y);
-  bs.Write<float>(size); 
+  bs.Write<float>(size);
 
   ENetPacket *packet = enet_packet_create(bs.GetData(), bs.GetSizeBytes(), ENET_PACKET_FLAG_UNSEQUENCED);
   enet_peer_send(peer, 1, packet);
@@ -77,8 +75,8 @@ void deserialize_new_entity(ENetPacket *packet, Entity &ent)
 {
   BitStream bs(packet->data, packet->dataLength);
   uint8_t type;
-  bs.Read<uint8_t>(type); 
-  
+  bs.Read<uint8_t>(type);
+
   bs.Read<uint32_t>(ent.color);
   bs.Read<float>(ent.x);
   bs.Read<float>(ent.y);
@@ -116,7 +114,7 @@ void deserialize_snapshot(ENetPacket *packet, uint16_t &eid, float &x, float &y,
   bs.Read<uint16_t>(eid);
   bs.Read<float>(x);
   bs.Read<float>(y);
-  bs.Read<float>(size); 
+  bs.Read<float>(size);
 }
 
 void send_entity_devoured(ENetPeer *peer, uint16_t devoured_eid, uint16_t devourer_eid, float new_size, float new_x, float new_y)

@@ -1,6 +1,6 @@
 #include "bitstream.h"
 #include <cstring>
-#include <cmath>
+#include <stdexcept>
 
 BitStream::BitStream() = default;
 
@@ -31,15 +31,15 @@ bool BitStream::ReadBit()
 {
     size_t byteIndex = m_ReadPose / 8;
     size_t bitIndex = m_ReadPose % 8;
-    
+
     if (byteIndex >= buffer.size())
     {
         throw std::out_of_range("Attempting to read beyond buffer");
     }
-    
+
     bool value = (buffer[byteIndex] & (1 << bitIndex)) != 0;
     m_ReadPose++;
-    
+
     return value;
 }
 
@@ -64,9 +64,9 @@ uint32_t BitStream::ReadBits(uint8_t bitCount)
 
 void BitStream::WriteBytes(const void* data, size_t size)
 {
-    AlignWrite();   
+    AlignWrite();
     size_t byteIndex = m_WritePose / 8;
-    
+
     if (byteIndex + size > buffer.size())
     {
         buffer.resize(byteIndex + size);
@@ -85,7 +85,7 @@ void BitStream::ReadBytes(void* data, size_t size)
         throw std::out_of_range("Attempting to read beyond buffer");
     }
 
-    std::memcpy(data, buffer.data() + byteIndex, size);    
+    std::memcpy(data, buffer.data() + byteIndex, size);
     m_ReadPose += size * 8;
 }
 
@@ -132,7 +132,7 @@ void BitStream::Read(std::string& value)
 
 void BitStream::WriteBoolArray(const std::vector<bool>& bools)
 {
-    Write<uint32_t>(static_cast<uint32_t>(bools.size()));   
+    Write<uint32_t>(static_cast<uint32_t>(bools.size()));
     for (bool b : bools)
     {
         WriteBit(b);
@@ -148,7 +148,7 @@ std::vector<bool> BitStream::ReadBoolArray()
     {
         bools[i] = ReadBit();
     }
-    
+
     return bools;
 }
 
